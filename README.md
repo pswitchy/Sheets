@@ -66,44 +66,6 @@ yarn dev
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Project Structure
-
-```tree
-sheets-clone/
-├── src/
-│   ├── components/
-│   │   └── Spreadsheet/
-│   │       ├── Cell.tsx
-│   │       ├── ChartDialog.tsx
-│   │       ├── FormulaBar.tsx
-│   │       ├── Grid.tsx
-│   │       ├── Menu.tsx
-│   │       ├── SheetTabs.tsx
-│   │       └── Toolbar.tsx
-│   ├── hooks/
-│   │   ├── useHotkeys.ts
-│   │   └── useToast.ts
-│   ├── lib/
-│   │   ├── chart-utils.ts
-│   │   └── utils.ts
-│   ├── pages/
-│   │   ├── api/
-│   │   └── spreadsheet/
-│   │       └── [id].tsx
-│   ├── services/
-│   │   └── spreadsheetService.ts
-│   ├── styles/
-│   │   └── globals.css
-│   └── types/
-│       └── spreadsheet.ts
-├── public/
-├── .env.local
-├── next.config.js
-├── package.json
-├── tailwind.config.js
-└── tsconfig.json
-```
-
 ## Features in Detail
 
 ### Spreadsheet Operations
@@ -196,54 +158,6 @@ git push origin feature/AmazingFeature
 - Code splitting
 - Asset optimization
 
-## Code Quality
-
-### TypeScript Configuration
-```json
-{
-  "compilerOptions": {
-    "target": "es5",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"]
-}
-```
-
-### ESLint Configuration
-```json
-{
-  "extends": [
-    "next/core-web-vitals",
-    "plugin:@typescript-eslint/recommended"
-  ],
-  "rules": {
-    "@typescript-eslint/no-unused-vars": "error",
-    "@typescript-eslint/no-explicit-any": "warn"
-  }
-}
-```
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## Acknowledgments
 
 - [Next.js Documentation](https://nextjs.org/docs)
@@ -251,17 +165,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Tailwind CSS](https://tailwindcss.com)
 - [Chart.js](https://www.chartjs.org)
 
-## Contact
-
-- **Author:** Parth Sharma
-- **Twitter:** [@parthsharma_git](https://twitter.com/parthsharma_git)
-- **GitHub:** [parthsharma-git](https://github.com/parthsharma-git)
-- **Project Link:** [https://github.com/parthsharma-git/sheets-clone](https://github.com/parthsharma-git/sheets-clone)
-
 ## Support
 
 If you find this project helpful, please give it a ⭐️!
-
----
-Last Updated: 2025-02-27 12:58:10  
-Author: parthsharma-git
