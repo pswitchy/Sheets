@@ -1,6 +1,4 @@
 // src/components/ui/menubar.tsx
-// Last Updated: 2025-02-26 17:10:23
-// Author: parthsharma-git
 
 import * as React from 'react';
 import * as MenubarPrimitive from '@radix-ui/react-menubar';

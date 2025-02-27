@@ -1,6 +1,4 @@
 // src/hooks/useToast.tsx
-// Last Updated: 2025-02-26 18:57:37
-// Author: parthsharma-git
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { Toast, ToastProps } from '@/components/ui/toast';

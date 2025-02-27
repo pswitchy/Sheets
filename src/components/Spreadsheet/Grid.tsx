@@ -1,6 +1,4 @@
 // src/components/Spreadsheet/Grid.tsx
-// Last Updated: 2025-02-26 20:53:13
-// Author: parthsharma-git
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Cell } from './Cell';

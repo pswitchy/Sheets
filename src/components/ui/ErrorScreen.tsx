@@ -1,3 +1,6 @@
+// src/components/ui/ErrorScreen.tsx
+import React from 'react';
+
 type ErrorScreenProps = {
     error: string;
     onRetry: () => void;

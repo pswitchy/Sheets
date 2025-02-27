@@ -1,6 +1,5 @@
 // src/lib/chart-utils.ts
-// Last Updated: 2025-02-26 19:22:25
-// Author: parthsharma-git
+
 
 import { SpreadsheetData } from '@/types/spreadsheet';
 import { ChartConfig, ChartData } from '@/types/chart';

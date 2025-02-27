@@ -1,6 +1,4 @@
 // src/components/Spreadsheet/Cell.tsx
-// Last Updated: 2025-02-26 20:53:13
-// Author: parthsharma-git
 
 import React, { useState, useRef, useEffect } from 'react';
 import { CellFormat } from '@/types/spreadsheet';

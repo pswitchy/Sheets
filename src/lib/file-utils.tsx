@@ -1,6 +1,4 @@
 // src/lib/file-utils.ts
-// Last Updated: 2025-02-26 16:25:21
-// Author: parthsharma-git
 
 export function downloadFile(data: Blob, filename: string) {
     const url = window.URL.createObjectURL(data);

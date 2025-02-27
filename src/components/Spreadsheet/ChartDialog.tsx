@@ -1,6 +1,4 @@
 // src/components/Spreadsheet/ChartDialog.tsx
-// Last Updated: 2025-02-26 17:07:53
-// Author: parthsharma-git
 
 import React, { useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';

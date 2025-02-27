@@ -1,6 +1,4 @@
 // src/components/ui/toast.tsx
-// Last Updated: 2025-02-26 18:57:37
-// Author: parthsharma-git
 
 import * as React from "react";
 import * as ToastPrimitives from "@radix-ui/react-toast";

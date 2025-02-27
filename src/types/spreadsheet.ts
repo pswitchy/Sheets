@@ -113,6 +113,7 @@ export interface Sheet {
     formula: string;
     format: CellFormat;
     dependencies: string[];
+    calculatedValue?: string;
   }
   
   export interface GridProps {

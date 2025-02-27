@@ -1,6 +1,4 @@
 // src/components/Spreadsheet/Menu.tsx
-// Last Updated: 2025-02-26 18:35:03
-// Author: parthsharma-git
 
 import React, { useCallback, useState } from 'react';
 import {

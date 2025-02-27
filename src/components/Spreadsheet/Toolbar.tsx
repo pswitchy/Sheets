@@ -1,6 +1,4 @@
 // src/components/Spreadsheet/Toolbar.tsx
-// Last Updated: 2025-02-26 18:33:32
-// Author: parthsharma-git
 
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';

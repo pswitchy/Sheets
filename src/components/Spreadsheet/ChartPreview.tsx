@@ -1,6 +1,5 @@
 // src/components/Spreadsheet/ChartPreview.tsx
 
-
 import React, { useEffect, useRef } from 'react';
 import { Chart as ChartJS } from 'chart.js/auto';
 import { ChartConfig, ChartData } from '@/types/chart';

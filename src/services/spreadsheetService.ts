@@ -1,6 +1,5 @@
 // src/services/spreadsheetService.ts
-// Last Updated: 2025-02-26 18:35:03
-// Author: parthsharma-git
+
 
 import axios from 'axios';
 import { SpreadsheetData, CellFormat } from '@/types/spreadsheet';

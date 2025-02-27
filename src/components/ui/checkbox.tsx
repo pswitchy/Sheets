@@ -1,6 +1,4 @@
 // src/components/ui/checkbox.tsx
-// Last Updated: 2025-02-26 16:38:43
-// Author: parthsharma-git
 
 import * as React from 'react';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';

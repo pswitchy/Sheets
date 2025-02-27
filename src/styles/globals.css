@@ -134,11 +134,17 @@ spreadsheet-grid {
       background-color: white;
       border: 1px solid var(--border);
     }
-  .grid-cell {
-    min-width: 100px;
-    min-height: 40px;
-    border: 1px solid var(--border);
-    background-color: white;
-     min-width: 100px;
-    min-height: 40px;
-  }
+    .grid-cell {
+        min-width: 100px;
+        min-height: 40px;
+        border: 1px solid var(--border);
+        background-color: white;
+        color: #000000; /* Change from var(--foreground) to explicit color */
+        padding: 4px 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .grid-cell[data-has-content="true"] {
+        color: #000000;
+      }

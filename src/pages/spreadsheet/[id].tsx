@@ -1,6 +1,4 @@
 // src/pages/spreadsheet/[id].tsx
-// Last Updated: 2025-02-26 21:13:53
-// Author: parthsharma-git
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -11,13 +9,105 @@ import { Grid } from '@/components/Spreadsheet/Grid';
 import FormulaBar from '@/components/Spreadsheet/FormulaBar';
 import { ChartDialog } from '@/components/Spreadsheet/ChartDialog';
 import { SheetTabs } from '@/components/Spreadsheet/SheetTabs';
-import { SpreadsheetData, CellFormat, SelectionState, Sheet } from '@/types/spreadsheet';
+import { SpreadsheetData, CellFormat, SelectionState, Sheet, Cell } from '@/types/spreadsheet';
 import { spreadsheetService } from '@/services/spreadsheetService';
 import { useToast } from '@/hooks/useToast';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useDebouncedCallback } from 'use-debounce';
 import { Loader2 } from 'lucide-react';
 import { ChartConfig } from '@/types/chart';
+import { ToastProvider } from '@/components/ui/toast';
+
+// Add spreadsheet math functions
+const spreadsheetFunctions = {
+  evaluateFormula: (formula: string, cells: { [key: string]: Cell }): string | number => {
+    if (!formula.startsWith('=')) return formula;
+    
+    const expression = formula.substring(1);
+    
+    // Replace cell references with their values
+    const evaluatedExpression = expression.replace(/[A-Z]+\d+/g, (match) => {
+      const cell = cells[match];
+      return cell ? cell.value.toString() : '0';
+    });
+
+    try {
+      // Basic math operations
+      if (evaluatedExpression.includes('SUM')) {
+        return evaluateSUM(evaluatedExpression, cells);
+      } else if (evaluatedExpression.includes('AVERAGE')) {
+        return evaluateAVERAGE(evaluatedExpression, cells);
+      } else if (evaluatedExpression.includes('COUNT')) {
+        return evaluateCOUNT(evaluatedExpression, cells);
+      }
+      
+      // Safely evaluate the expression
+      return Function(`"use strict"; return (${evaluatedExpression})`)();
+    } catch (error) {
+      console.error('Formula evaluation error:', error);
+      return '#ERROR!';
+    }
+  },
+};
+
+function evaluateSUM(expression: string, cells: { [key: string]: Cell }): number {
+  const range = expression.match(/SUM\((.*)\)/)?.[1];
+  if (!range) return 0;
+  
+  const values = getCellValuesFromRange(range, cells);
+  return values.reduce((sum, val) => sum + (Number(val) || 0), 0);
+}
+
+function evaluateAVERAGE(expression: string, cells: { [key: string]: Cell }): number {
+  const range = expression.match(/AVERAGE\((.*)\)/)?.[1];
+  if (!range) return 0;
+  
+  const values = getCellValuesFromRange(range, cells);
+  const sum = values.reduce((acc, val) => acc + (Number(val) || 0), 0);
+  return values.length ? sum / values.length : 0;
+}
+
+function evaluateCOUNT(expression: string, cells: { [key: string]: Cell }): number {
+  const range = expression.match(/COUNT\((.*)\)/)?.[1];
+  if (!range) return 0;
+  
+  const values = getCellValuesFromRange(range, cells);
+  return values.filter(val => val !== '').length;
+}
+
+function getCellValuesFromRange(range: string, cells: { [key: string]: Cell }): string[] {
+  const [start, end] = range.split(':');
+  const values: string[] = [];
+  
+  if (!end) {
+    // Single cell or comma-separated cells
+    return range.split(',').map(cellId => cells[cellId.trim()]?.value || '');
+  }
+  
+  // Range of cells
+  const startCell = parseCell(start);
+  const endCell = parseCell(end);
+  
+  for (let col = startCell.col; col <= endCell.col; col++) {
+    for (let row = startCell.row; row <= endCell.row; row++) {
+      const cellId = `${String.fromCharCode(65 + col)}${row}`;
+      values.push(cells[cellId]?.value || '');
+    }
+  }
+  
+  return values;
+}
+
+function parseCell(cellId: string): { col: number; row: number } {
+  const match = cellId.match(/([A-Z]+)(\d+)/);
+  if (!match) throw new Error('Invalid cell reference');
+  
+  const col = match[1].split('').reduce((acc, char) => 
+    acc * 26 + char.charCodeAt(0) - 65, 0);
+  const row = parseInt(match[2], 10);
+  
+  return { col, row };
+}
 
 const DEFAULT_SHEET: Sheet = {
   id: '1',
@@ -96,33 +186,97 @@ function SpreadsheetPage() {
     }
   }, 1000);
 
-  // All useCallback hooks
-  const handleCellChange = useCallback(async (cellRef: string, value: string) => {
+  // Function to evaluate formulas in the spreadsheet
+  const evaluateFormulas = useCallback((sheet: Sheet): Sheet => {
+    // Create a copy of sheet to avoid direct mutation
+    const updatedSheet = { ...sheet };
+    const updatedCells = { ...sheet.cells };
+    
+    // Process all cells to evaluate formulas
+    Object.keys(updatedCells).forEach(cellId => {
+      const cell = updatedCells[cellId];
+      if (cell?.value && typeof cell.value === 'string' && cell.value.startsWith('=')) {
+        try {
+          const result = spreadsheetFunctions.evaluateFormula(cell.value, updatedCells);
+          // Update calculated value but preserve the formula
+          updatedCells[cellId] = {
+            ...cell,
+            calculatedValue: result.toString()
+          };
+        } catch (error) {
+          console.error(`Error evaluating formula in cell ${cellId}:`, error);
+          updatedCells[cellId] = {
+            ...cell,
+            calculatedValue: '#ERROR!'
+          };
+        }
+      }
+    });
+    
+    updatedSheet.cells = updatedCells;
+    return updatedSheet;
+  }, []);
+
+  // Fix for the first error: Safely handle undefined sheets array in handleCellFormatChange
+  const handleCellFormatChange = useCallback(async (cellRef: string, format: Partial<CellFormat>) => {
     try {
-      if (!spreadsheetData?.sheets?.length) {
-        console.error('No sheets array in spreadsheet data');
-        setSpreadsheetData(prev => ({
-          ...prev,
-          sheets: [DEFAULT_SHEET]
-        }));
+      if (!cellRef) return;
+
+      // Safety check: Make sure sheets array exists and activeSheetId is valid
+      if (!spreadsheetData.sheets || spreadsheetData.sheets.length === 0) {
+        console.error("No sheets available in spreadsheet data");
         return;
       }
 
+      // Get the current sheet with a safety check
       const sheet = spreadsheetData.sheets.find(s => s.id === spreadsheetData.activeSheetId);
       if (!sheet) {
-        console.error('Active sheet not found');
+        console.error(`Active sheet with ID ${spreadsheetData.activeSheetId} not found`);
         return;
       }
 
-      const updatedSheet = {
-        ...sheet,
-        cells: {
-          ...sheet.cells,
-          [cellRef]: {
-            ...sheet.cells?.[cellRef],
-            value
+      // Create updated cells object with new format
+      const updatedCells = { ...sheet.cells };
+      
+      // If there's a range selection, update all cells in the range
+      if (selection.end && selection.end !== selection.start) {
+        const match = selection.start.match(/([A-Z]+)(\d+)/);
+        if (!match) throw new Error('Invalid cell reference');
+        const [startCol, startRow] = match.slice(1);
+        const endMatch = selection.end.match(/([A-Z]+)(\d+)/);
+        if (!endMatch) throw new Error('Invalid end cell reference');
+        const [endCol, endRow] = endMatch.slice(1);
+        
+        const startColNum = startCol.split('').reduce((acc, char) => acc * 26 + char.charCodeAt(0) - 64, 0);
+        const endColNum = endCol.split('').reduce((acc, char) => acc * 26 + char.charCodeAt(0) - 64, 0);
+        
+        for (let col = Math.min(startColNum, endColNum); col <= Math.max(startColNum, endColNum); col++) {
+          for (let row = Math.min(parseInt(startRow), parseInt(endRow)); row <= Math.max(parseInt(startRow), parseInt(endRow)); row++) {
+            const cellRef = `${String.fromCharCode(64 + col)}${row}`;
+            updatedCells[cellRef] = {
+              ...updatedCells[cellRef],
+              format: {
+                ...(updatedCells[cellRef]?.format || {}),
+                ...format
+              }
+            };
           }
         }
+      } else {
+        // Single cell update
+        updatedCells[selection.start] = {
+          ...updatedCells[selection.start],
+          format: {
+            ...(updatedCells[selection.start]?.format || {}),
+            ...format
+          }
+        };
+      }
+
+      // Create updated sheet and spreadsheet data
+      const updatedSheet = {
+        ...sheet,
+        cells: updatedCells
       };
 
       const updatedData = {
@@ -132,43 +286,10 @@ function SpreadsheetPage() {
         )
       };
 
+      // Update state and save changes
       setSpreadsheetData(updatedData);
+      setCurrentFormat(prev => ({ ...prev, ...format }));
       await debouncedSave(updatedData);
-    } catch (error) {
-      console.error('Failed to update cell:', error);
-      showToast({
-        variant: 'error',
-        title: 'Failed to update cell',
-        description: error instanceof Error ? error.message : 'Unknown error occurred'
-      });
-    }
-  }, [activeSheet, spreadsheetData, debouncedSave, showToast]);
-
-  const handleCellFormatChange = useCallback(async (cellRef: string, format: Partial<CellFormat>) => {
-    try {
-      const updatedSheet = {
-        ...activeSheet,
-        cells: {
-          ...activeSheet.cells,
-          [cellRef]: {
-            ...activeSheet.cells[cellRef],
-            format: {
-              ...activeSheet.cells[cellRef]?.format,
-              ...format
-            }
-          }
-        }
-      };
-
-      const updatedData = {
-        ...spreadsheetData,
-        sheets: spreadsheetData.sheets.map(sheet =>
-          sheet.id === activeSheet.id ? updatedSheet : sheet
-        )
-      };
-
-      setSpreadsheetData(updatedData);
-      debouncedSave(updatedData);
     } catch (error) {
       console.error('Failed to update cell format:', error);
       showToast({
@@ -176,14 +297,91 @@ function SpreadsheetPage() {
         title: 'Failed to update cell format'
       });
     }
-  }, [activeSheet, spreadsheetData, debouncedSave, showToast]);
+  }, [spreadsheetData, selection, debouncedSave, showToast]);
 
+  // Enhanced handleCellChange function with formula evaluation
+  const handleCellChange = useCallback((cellRef: string, value: string) => {
+    try {
+      if (!cellRef) return;
+
+      // Safety check for sheets
+      if (!spreadsheetData.sheets || spreadsheetData.sheets.length === 0) {
+        console.error("No sheets available in spreadsheet data");
+        return;
+      }
+
+      // Get the current sheet with a safety check
+      const sheet = spreadsheetData.sheets.find(s => s.id === spreadsheetData.activeSheetId);
+      if (!sheet) {
+        console.error(`Active sheet with ID ${spreadsheetData.activeSheetId} not found`);
+        return;
+      }
+
+      // Create updated cells object with new value
+      const updatedCells = { ...sheet.cells };
+      
+      // Update the cell with the new value
+      updatedCells[cellRef] = {
+        ...updatedCells[cellRef],
+        value
+      };
+
+      // Check if this is a formula and evaluate it
+      if (value.startsWith('=')) {
+        try {
+          const result = spreadsheetFunctions.evaluateFormula(value, updatedCells);
+          updatedCells[cellRef].calculatedValue = result.toString();
+        } catch (error) {
+          console.error(`Error evaluating formula:`, error);
+          updatedCells[cellRef].calculatedValue = '#ERROR!';
+        }
+      } else {
+        // If not a formula, remove any previously calculated value
+        if (updatedCells[cellRef].calculatedValue) {
+          delete updatedCells[cellRef].calculatedValue;
+        }
+      }
+
+      // Create updated sheet
+      const updatedSheet = {
+        ...sheet,
+        cells: updatedCells
+      };
+
+      // Re-evaluate all formulas in the sheet as they might reference this cell
+      const reevaluatedSheet = evaluateFormulas(updatedSheet);
+
+      // Create updated spreadsheet data
+      const updatedData = {
+        ...spreadsheetData,
+        sheets: spreadsheetData.sheets.map(s =>
+          s.id === sheet.id ? reevaluatedSheet : s
+        )
+      };
+
+      // Update state and save changes
+      setSpreadsheetData(updatedData);
+      debouncedSave(updatedData);
+    } catch (error) {
+      console.error('Failed to update cell value:', error);
+      showToast({
+        variant: 'error',
+        title: 'Failed to update cell value'
+      });
+    }
+  }, [spreadsheetData, debouncedSave, showToast, evaluateFormulas]);
+
+  // Handle selection change
   const handleSelectionChange = useCallback((newSelection: SelectionState) => {
     setSelection(newSelection);
-    const cellFormat = activeSheet.cells[newSelection.start]?.format || {};
-    setCurrentFormat(prev => ({ ...prev, ...cellFormat }));
+    // Safety check for accessing cell format when changing selection
+    if (newSelection.start && activeSheet && activeSheet.cells) {
+      const cellFormat = activeSheet.cells[newSelection.start]?.format || {};
+      setCurrentFormat(prev => ({ ...prev, ...cellFormat }));
+    }
   }, [activeSheet]);
 
+  // Handle sheet change
   const handleSheetChange = useCallback((sheetId: string) => {
     setSpreadsheetData(prev => ({
       ...prev,
@@ -196,6 +394,7 @@ function SpreadsheetPage() {
     setSelection({ ...DEFAULT_SELECTION, sheetId });
   }, []);
 
+  // Handle add sheet
   const handleAddSheet = useCallback(() => {
     const newSheetId = `sheet-${Date.now()}`;
     const currentSheets = spreadsheetData?.sheets || [];
@@ -222,8 +421,11 @@ function SpreadsheetPage() {
     setSelection({ ...DEFAULT_SELECTION, sheetId: newSheetId });
   }, [spreadsheetData]);
 
+  // Handle add row
   const handleAddRow = useCallback(async () => {
     try {
+      if (!activeSheet) return;
+
       const updatedSheet = {
         ...activeSheet,
         rowCount: activeSheet.rowCount + 1
@@ -247,126 +449,140 @@ function SpreadsheetPage() {
     }
   }, [activeSheet, spreadsheetData, debouncedSave, showToast]);
 
+  // Handle delete row
   const handleDeleteRow = useCallback(async () => {
     try {
-        if (activeSheet.rowCount <= 1) return; // Prevent deleting last row
-        
-        const updatedSheet = {
-            ...activeSheet,
-            rowCount: activeSheet.rowCount - 1,
-            cells: Object.fromEntries(
-                Object.entries(activeSheet.cells).filter(([cellRef]) => {
-                    const row = parseInt(cellRef.match(/\d+/)?.[0] || "0");
-                    return row <= activeSheet.rowCount - 1;
-                })
-            )
-        };
+      if (!activeSheet || activeSheet.rowCount <= 1) return; // Prevent deleting last row
 
-        const updatedData = {
-            ...spreadsheetData,
-            sheets: spreadsheetData.sheets.map(sheet =>
-                sheet.id === activeSheet.id ? updatedSheet : sheet
-            )
-        };
+      const updatedSheet = {
+        ...activeSheet,
+        rowCount: activeSheet.rowCount - 1,
+        cells: Object.fromEntries(
+          Object.entries(activeSheet.cells).filter(([cellRef]) => {
+            const row = parseInt(cellRef.match(/\d+/)?.[0] || "0");
+            return row <= activeSheet.rowCount - 1;
+          })
+        )
+      };
 
-        setSpreadsheetData(updatedData);
-        debouncedSave(updatedData);
+      // Re-evaluate formulas after deleting row
+      const reevaluatedSheet = evaluateFormulas(updatedSheet);
+
+      const updatedData = {
+        ...spreadsheetData,
+        sheets: spreadsheetData.sheets.map(sheet =>
+          sheet.id === activeSheet.id ? reevaluatedSheet : sheet
+        )
+      };
+
+      setSpreadsheetData(updatedData);
+      debouncedSave(updatedData);
     } catch (error) {
-        console.error('Failed to delete row:', error);
-        showToast({
-            variant: 'error',
-            title: 'Failed to delete row'
-        });
+      console.error('Failed to delete row:', error);
+      showToast({
+        variant: 'error',
+        title: 'Failed to delete row'
+      });
     }
-}, [activeSheet, spreadsheetData, debouncedSave, showToast]);
+  }, [activeSheet, spreadsheetData, debouncedSave, showToast, evaluateFormulas]);
 
-const handleAddColumn = useCallback(async () => {
+  // Handle add column
+  const handleAddColumn = useCallback(async () => {
     try {
-        const updatedSheet = {
-            ...activeSheet,
-            columnCount: activeSheet.columnCount + 1
-        };
+      if (!activeSheet) return;
 
-        const updatedData = {
-            ...spreadsheetData,
-            sheets: spreadsheetData.sheets.map(sheet =>
-                sheet.id === activeSheet.id ? updatedSheet : sheet
-            )
-        };
+      const updatedSheet = {
+        ...activeSheet,
+        columnCount: activeSheet.columnCount + 1
+      };
 
-        setSpreadsheetData(updatedData);
-        debouncedSave(updatedData);
+      const updatedData = {
+        ...spreadsheetData,
+        sheets: spreadsheetData.sheets.map(sheet =>
+          sheet.id === activeSheet.id ? updatedSheet : sheet
+        )
+      };
+
+      setSpreadsheetData(updatedData);
+      debouncedSave(updatedData);
     } catch (error) {
-        console.error('Failed to add column:', error);
-        showToast({
-            variant: 'error',
-            title: 'Failed to add column'
-        });
+      console.error('Failed to add column:', error);
+      showToast({
+        variant: 'error',
+        title: 'Failed to add column'
+      });
     }
-}, [activeSheet, spreadsheetData, debouncedSave, showToast]);
+  }, [activeSheet, spreadsheetData, debouncedSave, showToast]);
 
-const handleDeleteColumn = useCallback(async () => {
+  // Handle delete column
+  const handleDeleteColumn = useCallback(async () => {
     try {
-        if (activeSheet.columnCount <= 1) return; // Prevent deleting last column
-        
-        const updatedSheet = {
-            ...activeSheet,
-            columnCount: activeSheet.columnCount - 1,
-            cells: Object.fromEntries(
-                Object.entries(activeSheet.cells).filter(([cellRef]) => {
-                    const col = cellRef.match(/[A-Z]+/)?.[0] || "";
-                    return col.length === 1 && col.charCodeAt(0) - 65 < activeSheet.columnCount - 1;
-                })
-            )
-        };
+      if (!activeSheet || activeSheet.columnCount <= 1) return; // Prevent deleting last column
 
-        const updatedData = {
-            ...spreadsheetData,
-            sheets: spreadsheetData.sheets.map(sheet =>
-                sheet.id === activeSheet.id ? updatedSheet : sheet
-            )
-        };
+      const updatedSheet = {
+        ...activeSheet,
+        columnCount: activeSheet.columnCount - 1,
+        cells: Object.fromEntries(
+          Object.entries(activeSheet.cells).filter(([cellRef]) => {
+            const col = cellRef.match(/[A-Z]+/)?.[0] || "";
+            return col.length === 1 && col.charCodeAt(0) - 65 < activeSheet.columnCount - 1;
+          })
+        )
+      };
 
-        setSpreadsheetData(updatedData);
-        debouncedSave(updatedData);
+      // Re-evaluate formulas after deleting column
+      const reevaluatedSheet = evaluateFormulas(updatedSheet);
+
+      const updatedData = {
+        ...spreadsheetData,
+        sheets: spreadsheetData.sheets.map(sheet =>
+          sheet.id === activeSheet.id ? reevaluatedSheet : sheet
+        )
+      };
+
+      setSpreadsheetData(updatedData);
+      debouncedSave(updatedData);
     } catch (error) {
-        console.error('Failed to delete column:', error);
-        showToast({
-            variant: 'error',
-            title: 'Failed to delete column'
-        });
+      console.error('Failed to delete column:', error);
+      showToast({
+        variant: 'error',
+        title: 'Failed to delete column'
+      });
     }
-}, [activeSheet, spreadsheetData, debouncedSave, showToast]);
+  }, [activeSheet, spreadsheetData, debouncedSave, showToast, evaluateFormulas]);
 
+  // Handle create chart
   const handleCreateChart = useCallback((config: ChartConfig) => {
     try {
-        const updatedData = {
-            ...spreadsheetData,
-            charts: [...(spreadsheetData.charts || []), {
-                ...config,
-                id: config.id || `chart-${Date.now()}`,
-                sheetId: activeSheet.id
-            }]
-        };
+      if (!activeSheet) return;
+      
+      const updatedData = {
+        ...spreadsheetData,
+        charts: [...(spreadsheetData.charts || []), {
+          ...config,
+          id: config.id || `chart-${Date.now()}`,
+          sheetId: activeSheet.id
+        }]
+      };
 
-        setSpreadsheetData(updatedData);
-        debouncedSave(updatedData);
-        setIsChartDialogOpen(false);
-        
-        showToast({
-            variant: 'success',
-            title: 'Chart created successfully'
-        });
+      setSpreadsheetData(updatedData);
+      debouncedSave(updatedData);
+      setIsChartDialogOpen(false);
+      
+      showToast({
+        variant: 'success',
+        title: 'Chart created successfully'
+      });
     } catch (error) {
-        console.error('Failed to create chart:', error);
-        showToast({
-            variant: 'error',
-            title: 'Failed to create chart'
-        });
+      console.error('Failed to create chart:', error);
+      showToast({
+        variant: 'error',
+        title: 'Failed to create chart'
+      });
     }
-}, [activeSheet.id, spreadsheetData, debouncedSave, showToast]);
+  }, [activeSheet, spreadsheetData, debouncedSave, showToast]);
 
-  // useEffect hook
+  // useEffect hook for loading sheet data
   useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
@@ -378,7 +594,14 @@ const handleDeleteColumn = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         const data = await spreadsheetService.getSpreadsheet(spreadsheetId as string);
+        
         if (isMounted) {
+          // Process data to evaluate formulas on load
+          if (data.sheets && data.sheets.length > 0) {
+            const processedSheets = data.sheets.map(sheet => evaluateFormulas(sheet));
+            data.sheets = processedSheets;
+          }
+          
           setSpreadsheetData(data);
           if (data.activeSheetId) {
             setSelection({ ...DEFAULT_SELECTION, sheetId: data.activeSheetId });
@@ -406,7 +629,7 @@ const handleDeleteColumn = useCallback(async () => {
       isMounted = false;
       controller.abort();
     };
-  }, [spreadsheetId, showToast]);
+  }, [spreadsheetId, showToast, evaluateFormulas]);
 
   // Hotkeys
   useHotkeys('ctrl+b', () => {
@@ -462,23 +685,19 @@ const handleDeleteColumn = useCallback(async () => {
             spreadsheetId={spreadsheetId as string}
             spreadsheetData={spreadsheetData}
             onDataChange={setSpreadsheetData}
-            selectedRange={''}
+            selectedRange={selection.end ? `${selection.start}:${selection.end}` : selection.start}
           />
           
           <Toolbar
-            onFormatChange={(format) => {
-              if (selection.start) {
-                handleCellFormatChange(selection.start, format);
-              }
-            }}
+            onFormatChange={(format) => handleCellFormatChange(selection.start, format)}
             onAddRow={handleAddRow}
-            onDeleteRow={() => {}}
-            onAddColumn={() => {}}
-            onDeleteColumn={() => {}}
+            onDeleteRow={handleDeleteRow}
+            onAddColumn={handleAddColumn}
+            onDeleteColumn={handleDeleteColumn}
             currentFormat={currentFormat}
             selection={selection}
             spreadsheetId={spreadsheetId as string}
-            selectedRange={''}
+            selectedRange={selection.end ? `${selection.start}:${selection.end}` : selection.start}
           />
           
           <FormulaBar
@@ -499,9 +718,7 @@ const handleDeleteColumn = useCallback(async () => {
               onSelectionChange={handleSelectionChange}
               onCellChange={handleCellChange}
               currentFormat={currentFormat}
-              onCellFormatChange={function (cellRef: string, format: Partial<CellFormat>): void {
-                throw new Error('Function not implemented.');
-              }}
+              onCellFormatChange={handleCellFormatChange}
             />
           </div>
 
@@ -521,7 +738,7 @@ const handleDeleteColumn = useCallback(async () => {
             onCreateChart={handleCreateChart}
             sheet={activeSheet}
             selection={selection}
-            selectedRange={''}
+            selectedRange={selection.end ? `${selection.start}:${selection.end}` : selection.start}
             data={spreadsheetData}
           />
         </>
@@ -530,11 +747,13 @@ const handleDeleteColumn = useCallback(async () => {
   );
 }
 
-
 export default function SpreadsheetPageWrapper() {
-    return (
+  // Wrap the component with ToastProvider to fix the second error
+  return (
+    <ToastProvider>
       <ErrorBoundary>
         <SpreadsheetPage />
       </ErrorBoundary>
-    );
-  }
+    </ToastProvider>
+  );
+}

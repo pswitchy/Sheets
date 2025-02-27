@@ -35,13 +35,13 @@ export default async function handler(
 
     switch (format) {
       case 'xlsx':
-        const workbookBuffer = await exportUtils.toExcel(spreadsheet.data as SpreadsheetData, spreadsheet.name);
+        const workbookBuffer = await exportUtils.toExcel(spreadsheet.data as unknown as SpreadsheetData, spreadsheet.name);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${spreadsheet.name}.xlsx"`);
         return res.status(200).send(workbookBuffer);
 
       case 'csv':
-        const csvContent = await exportUtils.toCsv(spreadsheet.data, spreadsheet.name);
+        const csvContent = await exportUtils.toCsv(spreadsheet.data as unknown as SpreadsheetData, spreadsheet.name);
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', `attachment; filename="${spreadsheet.name}.csv"`);
         return res.status(200).send(csvContent);
