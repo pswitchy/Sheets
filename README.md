@@ -1,36 +1,267 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sheets Clone
+
+A powerful and responsive spreadsheet application built with Next.js, TypeScript, and Tailwind CSS. This project aims to provide a modern, web-based alternative to traditional spreadsheet software.
+
+## Features
+
+- 📊 Full spreadsheet functionality
+- 📝 Real-time collaboration
+- 📈 Chart creation and visualization
+- 🎨 Rich text formatting
+- 📑 Multiple sheets support 
+- 🔄 Auto-saving
+- ⌨️ Keyboard shortcuts
+- 📱 Responsive design
+- 🎯 Formula support
+- 🔒 Data persistence
+
+## Tech Stack
+
+- **Frontend Framework:** Next.js 14
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS
+- **State Management:** React Hooks
+- **UI Components:** shadcn/ui
+- **Icons:** Lucide Icons
+- **Charts:** Chart.js
+- **Form Handling:** React Hook Form
+- **Data Fetching:** Axios
+- **Date Handling:** date-fns
+- **Utilities:** clsx, tailwind-merge
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18.0 or higher
+- npm or yarn
+- Git
+
+### Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/parthsharma-git/sheets-clone.git
+cd sheets-clone
+```
+
+2. Install dependencies:
+```bash
+npm install
+# or
+yarn install
+```
+
+3. Create a `.env.local` file in the root directory:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3000/api
+```
+
+4. Start the development server:
 ```bash
 npm run dev
 # or
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```tree
+sheets-clone/
+├── src/
+│   ├── components/
+│   │   └── Spreadsheet/
+│   │       ├── Cell.tsx
+│   │       ├── ChartDialog.tsx
+│   │       ├── FormulaBar.tsx
+│   │       ├── Grid.tsx
+│   │       ├── Menu.tsx
+│   │       ├── SheetTabs.tsx
+│   │       └── Toolbar.tsx
+│   ├── hooks/
+│   │   ├── useHotkeys.ts
+│   │   └── useToast.ts
+│   ├── lib/
+│   │   ├── chart-utils.ts
+│   │   └── utils.ts
+│   ├── pages/
+│   │   ├── api/
+│   │   └── spreadsheet/
+│   │       └── [id].tsx
+│   ├── services/
+│   │   └── spreadsheetService.ts
+│   ├── styles/
+│   │   └── globals.css
+│   └── types/
+│       └── spreadsheet.ts
+├── public/
+├── .env.local
+├── next.config.js
+├── package.json
+├── tailwind.config.js
+└── tsconfig.json
+```
 
-## Learn More
+## Features in Detail
 
-To learn more about Next.js, take a look at the following resources:
+### Spreadsheet Operations
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Create, edit, and delete cells
+- Format text (bold, italic, underline)
+- Align text (left, center, right)
+- Change font family and size
+- Set background and text colors
+- Copy and paste cells
+- Undo/redo operations
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Sheet Management
 
-## Deploy on Vercel
+- Create multiple sheets
+- Switch between sheets
+- Rename sheets
+- Delete sheets
+- Duplicate sheets
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Chart Support
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Create various chart types:
+  - Line charts
+  - Bar charts
+  - Pie charts
+  - Scatter plots
+- Customize chart appearance
+- Auto-update charts when data changes
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| Ctrl + B | Bold |
+| Ctrl + I | Italic |
+| Ctrl + U | Underline |
+| Ctrl + Z | Undo |
+| Ctrl + Y | Redo |
+| Ctrl + C | Copy |
+| Ctrl + V | Paste |
+| Enter | Move down |
+| Tab | Move right |
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch:
+```bash
+git checkout -b feature/AmazingFeature
+```
+
+3. Commit your changes:
+```bash
+git commit -m 'Add some AmazingFeature'
+```
+
+4. Push to the branch:
+```bash
+git push origin feature/AmazingFeature
+```
+
+5. Open a Pull Request
+
+## Development Workflow
+
+1. Write clean, maintainable code
+2. Follow TypeScript best practices
+3. Add proper comments and documentation
+4. Include unit tests for new features
+5. Ensure responsive design
+6. Optimize performance
+7. Follow accessibility guidelines
+
+## Performance Optimization
+
+### Grid Rendering
+- Virtualized grid for handling large datasets
+- Optimized cell rendering
+- Efficient state management
+
+### Data Management
+- Debounced auto-saving
+- Batch updates for multiple cells
+- Optimized formula calculations
+
+### UI Performance
+- Memoized components
+- Lazy loading of features
+- Code splitting
+- Asset optimization
+
+## Code Quality
+
+### TypeScript Configuration
+```json
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
+}
+```
+
+### ESLint Configuration
+```json
+{
+  "extends": [
+    "next/core-web-vitals",
+    "plugin:@typescript-eslint/recommended"
+  ],
+  "rules": {
+    "@typescript-eslint/no-unused-vars": "error",
+    "@typescript-eslint/no-explicit-any": "warn"
+  }
+}
+```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [Next.js Documentation](https://nextjs.org/docs)
+- [shadcn/ui Components](https://ui.shadcn.com)
+- [Tailwind CSS](https://tailwindcss.com)
+- [Chart.js](https://www.chartjs.org)
+
+## Contact
+
+- **Author:** Parth Sharma
+- **Twitter:** [@parthsharma_git](https://twitter.com/parthsharma_git)
+- **GitHub:** [parthsharma-git](https://github.com/parthsharma-git)
+- **Project Link:** [https://github.com/parthsharma-git/sheets-clone](https://github.com/parthsharma-git/sheets-clone)
+
+## Support
+
+If you find this project helpful, please give it a ⭐️!
+
+---
+Last Updated: 2025-02-27 12:58:10  
+Author: parthsharma-git
