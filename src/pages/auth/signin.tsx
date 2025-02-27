@@ -28,7 +28,7 @@ export default function SignIn() {
               className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#24292F] hover:bg-[#24292F]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#24292F]"
             >
               <Image
-                src="/github-mark-white.svg"
+                src="/icons8-github-60.svg"
                 alt="GitHub logo"
                 width={20}
                 height={20}
