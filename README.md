@@ -41,7 +41,7 @@ A powerful and responsive spreadsheet application built with Next.js, TypeScript
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/parthsharma-git/sheets-clone.git
+git clone https://github.com/pswitchy/sheets.git
 cd sheets-clone
 ```
 
