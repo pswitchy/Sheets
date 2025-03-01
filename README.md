@@ -29,6 +29,29 @@ A powerful and responsive spreadsheet application built with Next.js, TypeScript
 - **Date Handling:** date-fns
 - **Utilities:** clsx, tailwind-merge
 
+## Data Structures
+
+### Cell
+- **Type:** Object
+- **Usage:** Represents each cell in the spreadsheet. Contains properties for value, format, and formula.
+
+### Sheet
+- **Type:** Object
+- **Usage:** Represents a sheet within the spreadsheet. Contains properties for cells, row and column count, and frozen rows/columns.
+
+### SpreadsheetData
+- **Type:** Object
+- **Usage:** Represents the entire spreadsheet. Contains properties for sheets, charts, and other metadata.
+
+### SelectionState
+- **Type:** Object
+- **Usage:** Represents the current selection state in the spreadsheet. Contains properties for start and end cell references and the sheet ID.
+
+### Why These Data Structures?
+- **Objects:** Provide a flexible way to manage complex structures like cells and sheets with various properties.
+- **Arrays:** Efficiently manage lists of sheets and charts.
+- **Strings:** Simplify referencing cells by their coordinates (e.g., "A1", "B2").
+
 ## Getting Started
 
 ### Prerequisites
