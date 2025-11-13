@@ -11,7 +11,7 @@ import { ChartDialog } from '@/components/Spreadsheet/ChartDialog';
 import { SheetTabs } from '@/components/Spreadsheet/SheetTabs';
 import { SpreadsheetData, CellFormat, SelectionState } from '@/types/spreadsheet';
 import { spreadsheetService } from '@/services/spreadsheetService';
-import { useToast } from '@/hooks/useToast';
+import { toast } from 'react-hot-toast';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Loader2 } from 'lucide-react';
 import { ChartConfig } from '@/types/chart';
@@ -23,7 +23,7 @@ import { SpreadsheetLayout } from '@/components/layouts/SpreadsheetLayout';
 function SpreadsheetPage() {
   const router = useRouter();
   const { id: spreadsheetId } = router.query;
-  const { showToast } = useToast();
+  // const { showToast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,13 +62,13 @@ function SpreadsheetPage() {
         setData({ ...loadedData, sheets: recalculatedSheets });
       } catch (err: any) {
         setError(err.message || 'Failed to load spreadsheet.');
-        showToast({ variant: 'error', title: 'Failed to load spreadsheet', description: err.message });
+        toast.error(err.message || 'Failed to load spreadsheet.');
       } finally {
         setIsLoading(false);
       }
     };
     loadSpreadsheet();
-  }, [spreadsheetId, setData, recalculateSheet, showToast]);
+  }, [spreadsheetId, setData, recalculateSheet]);
 
   useAutosave(data, async (dataToSave) => {
     if (!spreadsheetId || isLoading) return;
@@ -76,7 +76,7 @@ function SpreadsheetPage() {
       await spreadsheetService.updateSpreadsheet(spreadsheetId as string, dataToSave);
     } catch (err) {
       console.error('Autosave failed:', err);
-      showToast({ variant: 'error', title: 'Failed to save changes automatically' });
+      toast.error('Failed to autosave changes.');
     }
   }, 2000);
 

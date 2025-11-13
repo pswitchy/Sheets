@@ -14,7 +14,7 @@ import { exportUtils } from '@/lib/export-utils';
 import { SpreadsheetData } from '@/types/spreadsheet';
 import { downloadFile } from '@/lib/file-utils';
 import { spreadsheetService } from '@/services/spreadsheetService';
-import { useToast } from '@/hooks/useToast';
+import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/router';
 
 interface MenuProps {
@@ -37,34 +37,35 @@ export const Menu: React.FC<MenuProps> = ({
   onCopy,
   onPaste,
 }) => {
-  const { showToast } = useToast();
   const router = useRouter();
 
   const handleNew = async () => {
     try {
       const newSpreadsheet = await spreadsheetService.createSpreadsheet();
       if (newSpreadsheet?.data?.id) {
+        toast.success('New spreadsheet created');
         router.push(`/spreadsheet/${newSpreadsheet.data.id}`);
       } else {
         throw new Error("Failed to get ID for new spreadsheet");
       }
     } catch (error) {
       console.error(error);
-      showToast({ variant: 'error', title: 'Failed to create new spreadsheet' });
+      toast.error('Failed to create new spreadsheet.');
     }
   };
 
   const handleSave = async () => {
     try {
       await spreadsheetService.updateSpreadsheet(spreadsheetId, spreadsheetData);
-      showToast({ variant: 'success', title: 'Spreadsheet saved successfully' });
+      toast.success('Spreadsheet saved successfully');
     } catch (error) {
       console.error(error);
-      showToast({ variant: 'error', title: 'Failed to save spreadsheet' });
+      toast.error('Failed to save spreadsheet.');
     }
   };
 
   const handleExport = async (format: 'xlsx' | 'csv') => {
+    const toastId = toast.loading(`Exporting as ${format.toUpperCase()}...`);
     try {
       const filename = spreadsheetData.name || 'spreadsheet';
       let data: Blob;
@@ -76,20 +77,22 @@ export const Menu: React.FC<MenuProps> = ({
         data = await exportUtils.toCsv(spreadsheetData, `${filename}.${fileExt}`);
       }
       downloadFile(data, `${filename}.${fileExt}`);
+      toast.success(`Spreadsheet exported as`, { id: toastId });
     } catch (error) {
       console.error(error);
-      showToast({ variant: 'error', title: `Failed to export as ${format.toUpperCase()}` });
+      toast.error('Failed to export spreadsheet.', { id: toastId });
     }
   };
 
   const handleImport = async (file: File) => {
+    const toastId = toast.loading('Importing file...');
     try {
       const data = await spreadsheetService.importSpreadsheet(spreadsheetId, file);
       onDataChange(data);
-      showToast({ variant: 'success', title: 'File imported successfully' });
+      toast.success('File imported successfully', {id: toastId });
     } catch (error) {
       console.error(error);
-      showToast({ variant: 'error', title: 'Failed to import file' });
+      toast.error('Failed to import file.', { id: toastId });
     }
   };
 
