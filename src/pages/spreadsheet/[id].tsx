@@ -43,21 +43,26 @@ function SpreadsheetPage() {
     deleteColumn,
     setActiveSheetId,
     recalculateSheet,
+    cutCells,
+    copyCells,
+    pasteCells,
+    clearCells,
+    addSheet,
+    deleteSheet,
+    renameSheet,
   } = useSpreadsheet();
 
-  // Load initial data from the server
   useEffect(() => {
     const loadSpreadsheet = async () => {
       if (!spreadsheetId) return;
       setIsLoading(true);
       try {
         const loadedData = await spreadsheetService.getSpreadsheet(spreadsheetId as string);
-        // Recalculate all sheets on initial load to ensure computed values are up to date
         const recalculatedSheets = loadedData.sheets.map(sheet => recalculateSheet(sheet));
         setData({ ...loadedData, sheets: recalculatedSheets });
-      } catch (err) {
-        setError('Failed to load spreadsheet.');
-        showToast({ variant: 'error', title: 'Failed to load spreadsheet' });
+      } catch (err: any) {
+        setError(err.message || 'Failed to load spreadsheet.');
+        showToast({ variant: 'error', title: 'Failed to load spreadsheet', description: err.message });
       } finally {
         setIsLoading(false);
       }
@@ -65,7 +70,6 @@ function SpreadsheetPage() {
     loadSpreadsheet();
   }, [spreadsheetId, setData, recalculateSheet, showToast]);
 
-  // Autosave data whenever it changes (with a debounce)
   useAutosave(data, async (dataToSave) => {
     if (!spreadsheetId || isLoading) return;
     try {
@@ -84,7 +88,7 @@ function SpreadsheetPage() {
     const cell = activeSheet?.cells[selection.start];
     return cell?.formula || cell?.value || '';
   }, [selection.start, activeSheet]);
-  
+
   const handleCreateChart = useCallback((config: ChartConfig) => {
     setData(prev => ({
       ...prev,
@@ -93,17 +97,26 @@ function SpreadsheetPage() {
     setIsChartDialogOpen(false);
   }, [setData]);
 
-  // Keyboard shortcuts
   useHotkeys('ctrl+b, cmd+b', (e) => { e.preventDefault(); formatCells({ bold: !currentFormat.bold }) }, [currentFormat, formatCells]);
   useHotkeys('ctrl+i, cmd+i', (e) => { e.preventDefault(); formatCells({ italic: !currentFormat.italic }) }, [currentFormat, formatCells]);
   useHotkeys('ctrl+u, cmd+u', (e) => { e.preventDefault(); formatCells({ underline: !currentFormat.underline }) }, [currentFormat, formatCells]);
+  useHotkeys('ctrl+x, cmd+x', (e) => { e.preventDefault(); cutCells() }, [cutCells]);
+  useHotkeys('ctrl+c, cmd+c', (e) => { e.preventDefault(); copyCells() }, [copyCells]);
+  useHotkeys('ctrl+v, cmd+v', (e) => { e.preventDefault(); pasteCells() }, [pasteCells]);
 
   if (isLoading) {
     return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
   }
 
   if (error || !activeSheet) {
-    return <div className="h-screen flex items-center justify-center text-red-500">{error || "An unexpected error occurred: Active sheet not found."}</div>;
+    return (
+      <div className="h-screen flex items-center justify-center text-center text-red-500 p-4">
+        <div>
+            <h2 className="text-lg font-semibold">{error || "An unexpected error occurred."}</h2>
+            <p className="text-sm">{!activeSheet && "Could not find an active sheet to display."}</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -113,6 +126,9 @@ function SpreadsheetPage() {
         spreadsheetData={data}
         onDataChange={setData}
         selectedRange={selection.end ? `${selection.start}:${selection.end}` : selection.start}
+        onCut={cutCells}
+        onCopy={copyCells}
+        onPaste={pasteCells}
       />
       <Toolbar
         onFormatChange={formatCells}
@@ -132,13 +148,13 @@ function SpreadsheetPage() {
       />
       <div className="flex-1 relative overflow-hidden">
         <SpreadsheetContextMenu
-          onCut={() => { /* Implement clipboard logic */ }}
-          onCopy={() => { /* Implement clipboard logic */ }}
-          onPaste={() => { /* Implement clipboard logic */ }}
-          onDelete={() => { /* Implement clear cell values logic */ }}
+          onCut={cutCells}
+          onCopy={copyCells}
+          onPaste={pasteCells}
+          onDelete={clearCells}
           onFormat={(format) => formatCells({ [format]: !currentFormat[format as keyof CellFormat] } as Partial<CellFormat>)}
           onCreateChart={() => setIsChartDialogOpen(true)}
-          onFilter={() => { /* Implement filter logic */ }}
+          onFilter={() => {}}
         >
           <Grid
             sheet={activeSheet}
@@ -154,9 +170,9 @@ function SpreadsheetPage() {
         sheets={data.sheets}
         activeSheet={data.activeSheetId || ''}
         onSheetSelect={setActiveSheetId}
-        onAddSheet={() => { /* Implement add sheet logic in useSpreadsheet hook */ }}
-        onRenameSheet={() => { /* Implement rename sheet logic in useSpreadsheet hook */ }}
-        onDeleteSheet={() => { /* Implement delete sheet logic in useSpreadsheet hook */ }}
+        onAddSheet={addSheet}
+        onRenameSheet={renameSheet}
+        onDeleteSheet={deleteSheet}
         onSheetChange={setActiveSheetId}
       />
       <ChartDialog
@@ -172,8 +188,7 @@ function SpreadsheetPage() {
   );
 }
 
-// The wrapper is essential because useToast needs to be inside the ToastProvider
-export default function SpreadsheetPageWrapper() {
+export default function SpreadsheetPageWithBoundary() {
   return (
     <ErrorBoundary>
       <SpreadsheetPage />
