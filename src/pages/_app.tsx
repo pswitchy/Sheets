@@ -1,3 +1,5 @@
+// src/pages/_app.tsx
+
 import type { AppProps } from 'next/app';
 import { ToastProvider } from '@/hooks/useToast';
 import '@/styles/globals.css';
@@ -10,7 +12,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps<{se
     <SessionProvider session={session}>
       <ToastProvider>
         <Component {...pageProps} />
-        <Toaster />
+        <Toaster position="bottom-right" />
       </ToastProvider>
     </SessionProvider>
   );

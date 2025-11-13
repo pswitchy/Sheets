@@ -1,6 +1,5 @@
 // src/components/Spreadsheet/ContextMenu.tsx
 import React from 'react';
-// import { cn } from '@/lib/utils';
 import {
   ContextMenu as ContextMenuPrimitive,
   ContextMenuContent,
@@ -10,6 +9,7 @@ import {
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
+  ContextMenuTrigger, // Make sure to import the Trigger
 } from '@/components/ui/context-menu';
 import {
   Scissors,
@@ -24,13 +24,9 @@ import {
   ChartBar,
   Filter,
   Type,
-  Palette,
 } from 'lucide-react';
 
 interface ContextMenuProps {
-  x: number;
-  y: number;
-  onClose: () => void;
   onCut: () => void;
   onCopy: () => void;
   onPaste: () => void;
@@ -53,7 +49,9 @@ export const SpreadsheetContextMenu: React.FC<ContextMenuProps> = ({
 }) => {
   return (
     <ContextMenuPrimitive>
-      {children}
+      {/* The trigger wraps the component that should open the menu (the Grid) */}
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      
       <ContextMenuContent className="w-64">
         <ContextMenuItem onClick={onCut}>
           <Scissors className="w-4 h-4 mr-2" />

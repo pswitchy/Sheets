@@ -29,4 +29,8 @@ export interface Spreadsheet {
     fontFamily?: string;
   }
   
-  export type SpreadsheetListItem = Pick<Spreadsheet, 'id' | 'name' | 'updatedAt'>;
+export interface SpreadsheetListItem {
+  id: string;
+  name: string;
+  updatedAt: string; // or Date
+}

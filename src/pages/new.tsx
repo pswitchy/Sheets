@@ -1,7 +1,11 @@
+// src/pages/new.tsx
+
 import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import { spreadsheetService } from '@/services/spreadsheetService';
+import { Loader2 } from 'lucide-react';
 
 export default function NewSpreadsheetPage() {
   const { data: session, status } = useSession();
@@ -13,52 +17,36 @@ export default function NewSpreadsheetPage() {
       return;
     }
 
-    async function createSpreadsheet() {
+    const createAndRedirect = async () => {
       try {
-        const response = await fetch('/api/spreadsheets', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify({
-            name: 'Untitled Spreadsheet'
-          }),
-          credentials: 'include'
-        });
+        const result = await spreadsheetService.createSpreadsheet();
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        if (!result.success || !result.data?.id) {
+          throw new Error(result.error || 'Failed to create spreadsheet: Invalid response from server.');
         }
 
-        const result = await response.json();
-
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to create spreadsheet');
-        }
-
-        // Redirect to the new spreadsheet
+        // Redirect to the newly created spreadsheet
         router.push(`/spreadsheet/${result.data.id}`);
       } catch (error) {
         console.error('Error creating spreadsheet:', error);
+        // Redirect back to the dashboard with an error query param
         router.push('/?error=creation-failed');
       }
-    }
+    };
 
     if (status === 'authenticated') {
-      createSpreadsheet();
+      createAndRedirect();
     }
   }, [status, router]);
 
   return (
     <>
       <Head>
-        <title>Creating New Spreadsheet - Sheets Clone</title>
-        <meta name="description" content="Creating a new spreadsheet..." />
+        <title>Creating New Spreadsheet...</title>
       </Head>
-
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-gray-600">
+        <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
+        <p className="mt-4 text-lg">Creating your new spreadsheet...</p>
       </div>
     </>
   );

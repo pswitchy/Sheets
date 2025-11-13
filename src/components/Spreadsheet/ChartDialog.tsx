@@ -1,18 +1,17 @@
 // src/components/Spreadsheet/ChartDialog.tsx
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ChartConfig, ChartType } from '@/types/chart';
-import { SpreadsheetData } from '@/types/spreadsheet';
-import { Select } from '@/components/ui/select';
+import { SpreadsheetData, Sheet, SelectionState } from '@/types/spreadsheet';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ChartPreview } from './ChartPreview';
 import { generateChartData } from '@/lib/chart-utils';
-import { Sheet } from '@/types/spreadsheet';
-import { SelectionState } from '@/types/spreadsheet';
+import { Label } from '@/components/ui/label';
 
 interface ChartDialogProps {
   isOpen: boolean;
@@ -20,8 +19,8 @@ interface ChartDialogProps {
   onCreateChart: (config: ChartConfig) => void;
   selectedRange: string;
   data: SpreadsheetData;
-  sheet?: Sheet;
-  selection?: SelectionState;
+  sheet: Sheet;
+  selection: SelectionState;
 }
 
 export const ChartDialog: React.FC<ChartDialogProps> = ({
@@ -33,154 +32,100 @@ export const ChartDialog: React.FC<ChartDialogProps> = ({
 }) => {
   const [chartConfig, setChartConfig] = useState<ChartConfig>({
     id: `chart-${Date.now()}`,
-    type: 'line',
+    type: 'bar',
     title: '',
     dataRange: selectedRange,
     options: {
-      axisTitle: '',
+      axisTitle: { x: '', y: '' },
       showLegend: true,
       showGrid: true,
-      xAxis: '',
-      yAxis: '',
-      colors: ['#4F46E5', '#10B981', '#F59E0B'],
+      colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
     },
   });
 
+  // Update dataRange when the dialog opens with a new selection
+  useEffect(() => {
+    if (isOpen) {
+      setChartConfig(prev => ({ ...prev, dataRange: selectedRange }));
+    }
+  }, [isOpen, selectedRange]);
+
   const handleCreate = useCallback(() => {
-    if (!chartConfig.title) return;
-    onCreateChart({
-      ...chartConfig,
-      id: `chart-${Date.now()}`,
-    });
+    if (!chartConfig.title.trim() || !chartConfig.dataRange.trim()) {
+        // You can add a toast message here for user feedback
+        return;
+    };
+    onCreateChart(chartConfig);
     onClose();
   }, [chartConfig, onCreateChart, onClose]);
 
-  const handleCheckboxChange = useCallback((key: 'showLegend' | 'showGrid') => (checked: boolean) => {
-    setChartConfig(prev => ({
-      ...prev,
-      options: {
-        ...prev.options,
-        [key]: checked,
-      },
-    }));
-  }, []);
-
-  const chartData = generateChartData(data, chartConfig);
+  const chartData = useMemo(() => {
+    // Only generate chart data if the config is valid
+    if(chartConfig.dataRange.includes(':')) {
+        return generateChartData(data, chartConfig);
+    }
+    return { labels: [], datasets: [] };
+  }, [data, chartConfig]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Create Chart</DialogTitle>
+          <DialogTitle>Chart Editor</DialogTitle>
         </DialogHeader>
         
-        <Tabs defaultValue="data">
-          <TabsList>
-            <TabsTrigger value="data">Data</TabsTrigger>
-            <TabsTrigger value="customize">Customize</TabsTrigger>
-            <TabsTrigger value="preview">Preview</TabsTrigger>
-          </TabsList>
+        <div className="grid grid-cols-3 gap-6 flex-1 overflow-hidden">
+          {/* Controls */}
+          <div className="col-span-1 overflow-y-auto pr-4">
+            <Tabs defaultValue="setup">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="setup">Setup</TabsTrigger>
+                <TabsTrigger value="customize">Customize</TabsTrigger>
+              </TabsList>
+              <TabsContent value="setup" className="space-y-4 pt-4">
+                <div className="space-y-1">
+                  <Label>Chart Type</Label>
+                  <Select value={chartConfig.type} onValueChange={(v) => setChartConfig(p => ({ ...p, type: v as ChartType }))}>
+                    <SelectTrigger><SelectValue/></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bar">Bar</SelectItem>
+                      <SelectItem value="line">Line</SelectItem>
+                      <SelectItem value="pie">Pie</SelectItem>
+                      <SelectItem value="scatter">Scatter</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Data Range</Label>
+                  <Input value={chartConfig.dataRange} onChange={(e) => setChartConfig(p => ({ ...p, dataRange: e.target.value }))} placeholder="e.g., A1:B10" />
+                </div>
+              </TabsContent>
+              <TabsContent value="customize" className="space-y-4 pt-4">
+                <div className="space-y-1">
+                    <Label>Chart Title</Label>
+                    <Input value={chartConfig.title} onChange={(e) => setChartConfig(p => ({ ...p, title: e.target.value }))} placeholder="My Awesome Chart" />
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Checkbox id="showLegend" checked={chartConfig.options.showLegend} onCheckedChange={(c) => setChartConfig(p => ({ ...p, options: {...p.options, showLegend: !!c} }))} />
+                    <Label htmlFor="showLegend">Show Legend</Label>
+                </div>
+                 <div className="flex items-center space-x-2">
+                    <Checkbox id="showGrid" checked={chartConfig.options.showGrid} onCheckedChange={(c) => setChartConfig(p => ({ ...p, options: {...p.options, showGrid: !!c} }))} />
+                    <Label htmlFor="showGrid">Show Grid Lines</Label>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+          
+          {/* Preview */}
+          <div className="col-span-2 bg-gray-50 rounded-md p-4">
+            <ChartPreview config={chartConfig} data={chartData} />
+          </div>
+        </div>
 
-          <TabsContent value="data" className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label>Chart Type</label>
-                <Select
-                  value={chartConfig.type}
-                  onValueChange={(value: ChartType) => 
-                    setChartConfig(prev => ({ ...prev, type: value }))}
-                >
-                  <option value="line">Line</option>
-                  <option value="bar">Bar</option>
-                  <option value="pie">Pie</option>
-                  <option value="scatter">Scatter</option>
-                </Select>
-              </div>
-              <div>
-                <label>Title</label>
-                <Input
-                  value={chartConfig.title}
-                  onChange={(e) => 
-                    setChartConfig(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder="Chart Title"
-                />
-              </div>
-              <div>
-                <label>Data Range</label>
-                <Input
-                  value={chartConfig.dataRange}
-                  onChange={(e) => 
-                    setChartConfig(prev => ({ ...prev, dataRange: e.target.value }))}
-                  placeholder="e.g., A1:B10"
-                />
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="customize" className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Checkbox
-                  checked={chartConfig.options.showLegend}
-                  onCheckedChange={handleCheckboxChange('showLegend')}
-                  label="Show Legend"
-                />
-              </div>
-              <div>
-                <Checkbox
-                  checked={chartConfig.options.showGrid}
-                  onCheckedChange={handleCheckboxChange('showGrid')}
-                  label="Show Grid"
-                />
-              </div>
-              <div>
-                <label>X-Axis Title</label>
-                <Input
-                  value={chartConfig.options.xAxis}
-                  onChange={(e) =>
-                    setChartConfig(prev => ({
-                      ...prev,
-                      options: {
-                        ...prev.options,
-                        xAxis: e.target.value,
-                      },
-                    }))
-                  }
-                />
-              </div>
-              <div>
-                <label>Y-Axis Title</label>
-                <Input
-                  value={chartConfig.options.yAxis}
-                  onChange={(e) =>
-                    setChartConfig(prev => ({
-                      ...prev,
-                      options: {
-                        ...prev.options,
-                        yAxis: e.target.value,
-                      },
-                    }))
-                  }
-                />
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="preview" className="h-[400px]">
-            <ChartPreview
-              config={chartConfig}
-              data={chartData}
-            />
-          </TabsContent>
-        </Tabs>
-
-        <div className="flex justify-end space-x-2 mt-4">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleCreate}>
-            Create Chart
-          </Button>
+        <div className="flex justify-end space-x-2 mt-4 pt-4 border-t">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleCreate}>Insert Chart</Button>
         </div>
       </DialogContent>
     </Dialog>

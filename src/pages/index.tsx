@@ -1,10 +1,14 @@
+// src/pages/index.tsx
+
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import type { SpreadsheetListItem } from '@/types';
+import { Button } from '@/components/ui/button';
+import { spreadsheetService } from '@/services/spreadsheetService';
+import { SpreadsheetListItem } from '@/types'; // Assuming this type is defined in types/index.ts
+import { Loader2, PlusCircle, AlertTriangle } from 'lucide-react';
 
 function RecentSpreadsheets() {
   const [spreadsheets, setSpreadsheets] = useState<SpreadsheetListItem[]>([]);
@@ -12,100 +16,46 @@ function RecentSpreadsheets() {
   const [error, setError] = useState<string | null>(null);
   const { data: session } = useSession();
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function fetchSpreadsheets() {
-      try {
-        console.log('Fetching spreadsheets...');
-        
-        const response = await fetch('/api/spreadsheets', {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          },
-          credentials: 'include',
-        });
-
-        if (!isMounted) return;
-
-        console.log('Response status:', response.status);
-        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
-        if (!response.ok) {
-          const text = await response.text();
-          console.error('Response text:', text);
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const contentType = response.headers.get('content-type');
-        console.log('Content-Type:', contentType);
-
-        if (!contentType || !contentType.toLowerCase().includes('application/json')) {
-          console.error('Invalid content type:', contentType);
-          throw new Error('Server returned invalid response format');
-        }
-
-        const text = await response.text();
-        console.log('Response text:', text);
-
-        const result = JSON.parse(text);
-        console.log('Parsed result:', result);
-
-        if (!isMounted) return;
-
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to fetch spreadsheets');
-        }
-
+  const fetchSpreadsheets = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Use the service layer for consistency
+      const result = await spreadsheetService.getUserSpreadsheets();
+      if (result.success) {
         setSpreadsheets(result.data || []);
-        setError(null);
-
-      } catch (err) {
-        if (!isMounted) return;
-        console.error('Fetch error:', err);
-        setError(err instanceof Error ? err.message : 'An error occurred while fetching spreadsheets');
-      } finally {
-        if (!isMounted) return;
-        setLoading(false);
+      } else {
+        throw new Error(result.error || 'Failed to fetch spreadsheets');
       }
+    } catch (err: any) {
+      console.error('Fetch error:', err);
+      setError(err.message || 'An unknown error occurred.');
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     if (session?.user?.id) {
       fetchSpreadsheets();
     }
-
-    return () => {
-      isMounted = false;
-    };
   }, [session]);
 
   if (loading) {
     return (
-      <div className="p-8 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+      <div className="flex justify-center items-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-8 text-center">
-        <div className="text-red-600 mb-4">
-          <p className="font-semibold">Error loading spreadsheets</p>
-          <p className="text-sm mt-1">{error}</p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setLoading(true);
-            setError(null);
-            window.location.reload();
-          }}
-          className="mt-4"
-        >
+      <div className="p-8 text-center text-red-600">
+        <AlertTriangle className="mx-auto h-10 w-10 mb-2" />
+        <p className="font-semibold">Error loading spreadsheets</p>
+        <p className="text-sm mt-1">{error}</p>
+        <Button variant="outline" onClick={fetchSpreadsheets} className="mt-4">
           Try Again
         </Button>
       </div>
@@ -114,43 +64,34 @@ function RecentSpreadsheets() {
 
   if (spreadsheets.length === 0) {
     return (
-      <div className="p-8 text-center text-gray-500">
-        <p>No spreadsheets yet</p>
-        <Link href="/new">
-          <Button variant="outline" className="mt-4">
-            Create your first spreadsheet
-          </Button>
+      <div className="p-12 text-center text-gray-500">
+        <PlusCircle className="mx-auto h-12 w-12 text-gray-400 mb-2" />
+        <h3 className="text-lg font-medium">No spreadsheets yet</h3>
+        <p className="text-sm mt-1">Get started by creating a new one.</p>
+        <Link href="/new" passHref>
+            <Button className="mt-4">Create your first spreadsheet</Button>
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden">
-      <ul className="divide-y divide-gray-200">
-        {spreadsheets.map((spreadsheet) => (
-          <li key={spreadsheet.id}>
-            <Link
-              href={`/spreadsheet/${spreadsheet.id}`}
-              className="block hover:bg-gray-50"
-            >
-              <div className="px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-blue-600 truncate">
-                    {spreadsheet.name}
-                  </p>
-                  <div className="ml-2 flex-shrink-0 flex">
-                    <p className="text-sm text-gray-500">
-                      {new Date(spreadsheet.updatedAt).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
+    <ul className="divide-y divide-gray-200">
+      {spreadsheets.map((sheet) => (
+        <li key={sheet.id}>
+          <Link href={`/spreadsheet/${sheet.id}`} passHref>
+            <a className="block hover:bg-gray-50 transition-colors">
+              <div className="px-6 py-4 flex items-center justify-between">
+                <p className="text-sm font-medium text-blue-600 truncate">{sheet.name}</p>
+                <p className="text-xs text-gray-500">
+                  Updated {new Date(sheet.updatedAt).toLocaleString()}
+                </p>
               </div>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
+            </a>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -167,48 +108,40 @@ export default function HomePage() {
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
       </div>
     );
   }
 
   if (!session) {
-    return null;
+    return null; // or a redirect component
   }
 
   return (
     <>
       <Head>
-        <title>Sheets Clone - Dashboard</title>
-        <meta name="description" content="A spreadsheet application built with Next.js" />
-        <meta name="author" content="parthsharma-git" />
-        <meta name="last-modified" content="2025-02-26 12:47:50" />
+        <title>Dashboard - Sheets Clone</title>
       </Head>
-
       <div className="min-h-screen bg-gray-50">
-        <header className="bg-white shadow">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+        <header className="bg-white shadow-sm sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
+            <h1 className="text-xl font-semibold text-gray-900">My Spreadsheets</h1>
             <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-semibold text-gray-900">My Spreadsheets</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Link href="/new">
+              <Link href="/new" passHref>
                 <Button>New Spreadsheet</Button>
               </Link>
               <div className="flex items-center space-x-2">
                 <img
-                  src={session.user.image || '/default-avatar.png'}
+                  src={session.user.image || `https://avatar.vercel.sh/${session.user.email}.png`}
                   alt={session.user.name || 'User'}
                   className="h-8 w-8 rounded-full"
                 />
-                <span className="text-sm text-gray-700">{session.user.name}</span>
               </div>
             </div>
           </div>
         </header>
-
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-white rounded-lg shadow">
+          <div className="bg-white rounded-lg shadow overflow-hidden">
             <RecentSpreadsheets />
           </div>
         </main>

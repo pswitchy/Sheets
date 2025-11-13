@@ -1,23 +1,17 @@
 // src/components/Spreadsheet/FilterDialog.tsx
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-
-interface FilterDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onApplyFilter: (config: FilterConfig) => void;
-  selectedRange: string;
-}
 
 export interface FilterConfig {
   column: string;
   condition: FilterCondition;
   value: string;
-  value2?: string;  // For 'between' condition
+  value2?: string;
 }
 
 type FilterCondition =
@@ -31,6 +25,13 @@ type FilterCondition =
   | 'empty'
   | 'not_empty';
 
+interface FilterDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onApplyFilter: (config: FilterConfig) => void;
+  selectedRange: string;
+}
+
 const FilterDialog: React.FC<FilterDialogProps> = ({
   isOpen,
   onClose,
@@ -38,10 +39,18 @@ const FilterDialog: React.FC<FilterDialogProps> = ({
   selectedRange,
 }) => {
   const [config, setConfig] = useState<FilterConfig>({
-    column: selectedRange.split(':')[0].replace(/[0-9]/g, ''),
+    column: 'A',
     condition: 'equals',
     value: '',
   });
+
+  // When the dialog opens, set the initial column based on the selection
+  useEffect(() => {
+    if (isOpen) {
+      const startColumn = selectedRange.match(/[A-Z]+/)?.[0] || 'A';
+      setConfig(prev => ({ ...prev, column: startColumn }));
+    }
+  }, [isOpen, selectedRange]);
 
   const handleApply = () => {
     onApplyFilter(config);
@@ -52,46 +61,46 @@ const FilterDialog: React.FC<FilterDialogProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create Filter</DialogTitle>
+          <DialogTitle>Create a Filter</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
             <Label>Column</Label>
-            <Select
-              value={config.column}
-              onValueChange={(value) => setConfig({ ...config, column: value })}
-            >
-              {/* Generate options A-Z */}
-              {Array.from({ length: 26 }, (_, i) => (
-                <option key={i} value={String.fromCharCode(65 + i)}>
-                  Column {String.fromCharCode(65 + i)}
-                </option>
-              ))}
+            <Select value={config.column} onValueChange={(value) => setConfig({ ...config, column: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a column..." />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(col => (
+                  <SelectItem key={col} value={col}>Column {col}</SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </div>
 
-          <div>
+          <div className="space-y-2">
             <Label>Condition</Label>
-            <Select
-              value={config.condition}
-              onValueChange={(value) => 
-                setConfig({ ...config, condition: value as FilterCondition })}
-            >
-              <option value="equals">Equals</option>
-              <option value="not_equals">Does not equal</option>
-              <option value="contains">Contains</option>
-              <option value="not_contains">Does not contain</option>
-              <option value="greater">Greater than</option>
-              <option value="less">Less than</option>
-              <option value="between">Between</option>
-              <option value="empty">Is empty</option>
-              <option value="not_empty">Is not empty</option>
+            <Select value={config.condition} onValueChange={(value) => setConfig({ ...config, condition: value as FilterCondition })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a condition..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="equals">Equals</SelectItem>
+                <SelectItem value="not_equals">Does not equal</SelectItem>
+                <SelectItem value="contains">Contains</SelectItem>
+                <SelectItem value="not_contains">Does not contain</SelectItem>
+                <SelectItem value="greater">Greater than</SelectItem>
+                <SelectItem value="less">Less than</SelectItem>
+                <SelectItem value="between">Between</SelectItem>
+                <SelectItem value="empty">Is empty</SelectItem>
+                <SelectItem value="not_empty">Is not empty</SelectItem>
+              </SelectContent>
             </Select>
           </div>
 
           {!['empty', 'not_empty'].includes(config.condition) && (
-            <div>
+            <div className="space-y-2">
               <Label>Value</Label>
               <Input
                 value={config.value}
@@ -99,13 +108,11 @@ const FilterDialog: React.FC<FilterDialogProps> = ({
                 placeholder="Enter value"
               />
               {config.condition === 'between' && (
-                <div className="mt-2">
-                  <Label>End Value</Label>
+                <div className="mt-2 space-y-2">
+                  <Label>And</Label>
                   <Input
                     value={config.value2 || ''}
-                    onChange={(e) =>
-                      setConfig({ ...config, value2: e.target.value })
-                    }
+                    onChange={(e) => setConfig({ ...config, value2: e.target.value })}
                     placeholder="Enter end value"
                   />
                 </div>
@@ -115,12 +122,8 @@ const FilterDialog: React.FC<FilterDialogProps> = ({
         </div>
 
         <div className="flex justify-end space-x-2 mt-4">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleApply}>
-            Apply Filter
-          </Button>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleApply}>Apply Filter</Button>
         </div>
       </DialogContent>
     </Dialog>

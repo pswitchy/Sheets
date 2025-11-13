@@ -1,9 +1,11 @@
 // src/components/Spreadsheet/ChartPreview.tsx
 
 import React, { useEffect, useRef } from 'react';
-import { Chart as ChartJS } from 'chart.js/auto';
+import { Chart as ChartJS, registerables } from 'chart.js';
 import { ChartConfig, ChartData } from '@/types/chart';
-import { generateChartData } from '@/lib/chart-utils';
+
+// Register all necessary components for Chart.js
+ChartJS.register(...registerables);
 
 interface ChartPreviewProps {
   config: ChartConfig;
@@ -16,51 +18,36 @@ export const ChartPreview: React.FC<ChartPreviewProps> = ({ config, data }) => {
 
   useEffect(() => {
     if (!chartRef.current) return;
+    const ctx = chartRef.current.getContext('2d');
+    if (!ctx) return;
 
-    // Destroy previous chart if exists
+    // Destroy the previous chart instance before creating a new one
     if (chartInstance.current) {
       chartInstance.current.destroy();
     }
 
-    // Create new chart
-    const ctx = chartRef.current.getContext('2d');
-    if (!ctx) return;
-
+    // Create the new chart instance
     chartInstance.current = new ChartJS(ctx, {
       type: config.type,
-      data: {
-        labels: data.labels,
-        datasets: data.datasets.map((dataset, index) => ({
-          label: dataset.label,
-          data: dataset.data,
-          backgroundColor: config.options.colors?.[index % (config.options.colors.length || 1)],
-          borderColor: config.options.colors?.[index % (config.options.colors.length || 1)],
-          tension: 0.4,
-        })),
-      },
+      data: data,
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
           title: {
-            display: true,
+            display: !!config.title,
             text: config.title,
-            font: {
-              size: 16,
-              weight: 'bold',
-            },
+            font: { size: 16 },
           },
           legend: {
             display: config.options.showLegend,
-            position: 'bottom',
+            position: 'top',
           },
         },
         scales: config.type !== 'pie' ? {
           x: {
             display: true,
-            grid: {
-              display: config.options.showGrid,
-            },
+            grid: { display: config.options.showGrid },
             title: {
               display: !!config.options.axisTitle?.x,
               text: config.options.axisTitle?.x,
@@ -68,9 +55,7 @@ export const ChartPreview: React.FC<ChartPreviewProps> = ({ config, data }) => {
           },
           y: {
             display: true,
-            grid: {
-              display: config.options.showGrid,
-            },
+            grid: { display: config.options.showGrid },
             title: {
               display: !!config.options.axisTitle?.y,
               text: config.options.axisTitle?.y,
@@ -78,32 +63,28 @@ export const ChartPreview: React.FC<ChartPreviewProps> = ({ config, data }) => {
             beginAtZero: true,
           },
         } : undefined,
-        animation: {
-          duration: 500,
-        },
       },
     });
 
+    // Cleanup function to destroy the chart when the component unmounts
     return () => {
       if (chartInstance.current) {
         chartInstance.current.destroy();
       }
     };
-  }, [config, data]);
+  }, [config, data]); // Re-run effect if config or data changes
 
-  const renderNoDataMessage = () => (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <p className="text-gray-500 mb-2">No data available</p>
-        <p className="text-sm text-gray-400">
-          Select a valid data range to preview the chart
-        </p>
+  if (!data || !data.datasets || data.datasets.every(ds => ds.data.length === 0)) {
+    return (
+      <div className="flex items-center justify-center h-full text-center text-gray-500">
+        <div>
+          <p className="font-semibold">No Data to Display</p>
+          <p className="text-sm mt-1">
+            Please provide a valid data range (e.g., A1:B5) in the setup tab.
+          </p>
+        </div>
       </div>
-    </div>
-  );
-
-  if (!data.datasets.length || !data.labels.length) {
-    return renderNoDataMessage();
+    );
   }
 
   return (

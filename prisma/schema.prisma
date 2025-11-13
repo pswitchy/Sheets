@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,23 +8,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
 model Account {
   id                String   @id @default(cuid())
   userId            String
-  type             String
-  provider         String
+  type              String
+  provider          String
   providerAccountId String
-  refresh_token    String?  @db.Text
-  access_token     String?  @db.Text
-  expires_at       Int?
-  token_type       String?
-  scope            String?
-  id_token         String?  @db.Text
-  session_state    String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade) 
 
   @@unique([provider, providerAccountId])
 }
@@ -35,7 +37,8 @@ model Session {
   expires      DateTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade) 
 }
 
 model User {
@@ -47,6 +50,8 @@ model User {
   username      String?       @unique
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  
+  // Relations
   accounts      Account[]
   sessions      Session[]
   spreadsheets  Spreadsheet[]
@@ -62,49 +67,55 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+
 model Spreadsheet {
   id          String    @id @default(cuid())
   name        String
-  data        Json      @default("{\"cells\":{},\"rowCount\":100,\"columnCount\":26}")
+  data        Json      @default("{\"sheets\":[{\"id\":\"sheet1\",\"name\":\"Sheet1\",\"isActive\":true,\"cells\":{},\"rowCount\":100,\"columnCount\":26,\"frozen\":{\"rows\":0,\"columns\":0}}],\"activeSheetId\":\"sheet1\",\"charts\":[]}")
   userId      String
   isPublic    Boolean   @default(false)
   version     Int       @default(1)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade) 
   shares      Share[]
   comments    Comment[]
+  @@index([userId])
 }
 
 model Share {
   id            String     @id @default(cuid())
   spreadsheetId String
   userId        String
-  permission    Permission @default(READ)
+  permission    Permission @default(VIEW) 
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
   spreadsheet   Spreadsheet @relation(fields: [spreadsheetId], references: [id], onDelete: Cascade)
-  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([spreadsheetId, userId])
 }
 
 model Comment {
   id            String     @id @default(cuid())
-  content       String
-  cellId        String
+  content       String     @db.Text 
+  cellId        String     
+  sheetId       String     
   spreadsheetId String
   userId        String
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
   spreadsheet   Spreadsheet @relation(fields: [spreadsheetId], references: [id], onDelete: Cascade)
-  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([spreadsheetId, cellId, sheetId]) 
 }
 
 enum Permission {
-  READ
-  WRITE
+  VIEW   // Renamed from READ
+  EDIT   // Renamed from WRITE
   ADMIN
 }

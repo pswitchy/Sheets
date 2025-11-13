@@ -1,180 +1,138 @@
 // src/hooks/useSpreadsheet.ts
 
 import { useState, useCallback } from 'react';
-import { SpreadsheetData, Cell, CellPosition } from '@/types/spreadsheet';
+import { SpreadsheetData, Cell, CellFormat, SelectionState, Sheet } from '@/types/spreadsheet';
 import { spreadsheetFunctions } from '@/lib/spreadsheet-functions';
-import { cellUtils } from '@/lib/cell-utils';
+import { columnToNumber, numberToColumn } from '@/lib/utils';
+
+const DEFAULT_SHEET: Sheet = {
+  id: 'sheet1',
+  name: 'Sheet1',
+  isActive: true,
+  cells: {},
+  rowCount: 100,
+  columnCount: 26,
+  frozen: { rows: 0, columns: 0 }
+};
 
 export function useSpreadsheet(initialData?: SpreadsheetData) {
   const [data, setData] = useState<SpreadsheetData>(initialData || {
-    cells: {},
+    id: '',
+    name: 'Untitled Spreadsheet',
+    sheets: [DEFAULT_SHEET],
+    activeSheetId: DEFAULT_SHEET.id,
     rowCount: 100,
     columnCount: 26,
-    sheets: [],
+    cells: {}, // This top-level cells object is kept for compatibility but logic now favors per-sheet cells
   });
 
-  const [selectedRange, setSelectedRange] = useState<{
-    start: CellPosition;
-    end: CellPosition;
-  } | null>(null);
+  const [selection, setSelection] = useState<SelectionState>({
+    start: 'A1',
+    end: 'A1',
+    sheetId: data.activeSheetId || 'sheet1'
+  });
 
-  const updateCell = useCallback((cellId: string, value: string) => {
-    setData((prevData) => {
-      const newCells = { ...prevData.cells };
+  const activeSheet = data.sheets.find(s => s.id === data.activeSheetId) || data.sheets[0];
+
+  const updateActiveSheet = useCallback((updater: (sheet: Sheet) => Sheet) => {
+    setData(prevData => {
+      const updatedSheets = prevData.sheets.map(s =>
+        s.id === prevData.activeSheetId ? updater(s) : s
+      );
+      return { ...prevData, sheets: updatedSheets };
+    });
+  }, []);
+
+  const recalculateSheet = useCallback((sheet: Sheet): Sheet => {
+    const cells = { ...sheet.cells };
+    // A true implementation needs a topological sort for dependency graphs. This is a simplified sequential recalculation.
+    const calculationOrder = Object.keys(cells);
+
+    calculationOrder.forEach(cellId => {
+        const cell = cells[cellId];
+        if (cell?.formula) {
+            const result = spreadsheetFunctions.evaluateFormula(cell.formula, cells);
+            cells[cellId] = { ...cell, calculatedValue: result.toString() };
+        }
+    });
+
+    return { ...sheet, cells };
+  }, []);
+
+  const updateCell = useCallback((cellRef: string, value: string) => {
+    updateActiveSheet(sheet => {
+      const newCells = { ...sheet.cells };
+      const oldCell = newCells[cellRef];
+
+      newCells[cellRef] = {
+        ...(oldCell || { id: cellRef, format: {}, dependencies: [] }),
+        value: value,
+        formula: value.startsWith('=') ? value : '',
+      } as Cell;
       
-      if (!newCells[cellId]) {
-        newCells[cellId] = {
-          id: cellId,
-          value: '',
-          formula: '',
-          format: {
-            bold: false,
-            italic: false,
-            underline: false,
-            fontSize: 14,
-            color: '#000000',
-            backgroundColor: '#ffffff',
-          },
-          dependencies: [],
-        };
-      }
-  
-      if (value.startsWith('=')) {
-        newCells[cellId].formula = value;
-        const result = spreadsheetFunctions.evaluateFormula(value, newCells);
-        newCells[cellId].value = result.toString(); // Convert to string
-      } else {
-        newCells[cellId].value = value;
-        newCells[cellId].formula = '';
-      }
-  
-      return {
-        ...prevData,
-        cells: newCells,
-      };
+      const newSheet = { ...sheet, cells: newCells };
+      // After one cell changes, the whole sheet needs recalculation for dependent cells
+      return recalculateSheet(newSheet);
     });
+  }, [updateActiveSheet, recalculateSheet]);
+
+  const formatCells = useCallback((format: Partial<CellFormat>) => {
+    updateActiveSheet(sheet => {
+        const newCells = { ...sheet.cells };
+        const startRef = parseCellRef(selection.start);
+        const endRef = parseCellRef(selection.end);
+
+        const minRow = Math.min(startRef.row, endRef.row);
+        const maxRow = Math.max(startRef.row, endRef.row);
+        const minCol = Math.min(startRef.col, endRef.col);
+        const maxCol = Math.max(startRef.col, endRef.col);
+
+        for (let r = minRow; r <= maxRow; r++) {
+            for (let c = minCol; c <= maxCol; c++) {
+                const cellRef = `${numberToColumn(c)}${r}`;
+                const oldCell = newCells[cellRef] || { value: '', id: cellRef, formula: '', dependencies: [] };
+                newCells[cellRef] = {
+                    ...oldCell,
+                    format: { ...(oldCell.format || {}), ...format }
+                } as Cell;
+            }
+        }
+        return { ...sheet, cells: newCells };
+    });
+  }, [selection, updateActiveSheet]);
+  
+  const addRow = useCallback(() => updateActiveSheet(s => ({ ...s, rowCount: s.rowCount + 1 })), [updateActiveSheet]);
+  const deleteRow = useCallback(() => updateActiveSheet(s => ({ ...s, rowCount: Math.max(1, s.rowCount - 1) })), [updateActiveSheet]);
+  const addColumn = useCallback(() => updateActiveSheet(s => ({ ...s, columnCount: s.columnCount + 1 })), [updateActiveSheet]);
+  const deleteColumn = useCallback(() => updateActiveSheet(s => ({ ...s, columnCount: Math.max(1, s.columnCount - 1) })), [updateActiveSheet]);
+
+  const setActiveSheetId = useCallback((sheetId: string) => {
+    setData(prev => ({...prev, activeSheetId: sheetId, sheets: prev.sheets.map(s => ({...s, isActive: s.id === sheetId}))}));
+    setSelection({start: 'A1', end: 'A1', sheetId});
   }, []);
 
-  const formatCell = useCallback((cellId: string, format: Partial<Cell['format']>) => {
-    setData((prevData) => {
-      const newCells = { ...prevData.cells };
-      if (!newCells[cellId]) return prevData;
-
-      newCells[cellId].format = {
-        ...newCells[cellId].format,
-        ...format,
-      };
-
-      return {
-        ...prevData,
-        cells: newCells,
-      };
-    });
-  }, []);
-
-  const findDependentCells = (cellId: string, cells: { [key: string]: Cell }): string[] => {
-    return Object.entries(cells)
-      .filter(([_, cell]) => cell.dependencies.includes(cellId))
-      .map(([id]) => id);
+  const parseCellRef = (ref: string): { row: number; col: number } => {
+    const match = ref.match(/([A-Z]+)(\d+)/);
+    if (!match) return { row: 1, col: 1 }; // Default to A1
+    return {
+      col: columnToNumber(match[1]),
+      row: parseInt(match[2], 10),
+    };
   };
-
-  const addRow = useCallback(() => {
-    setData((prevData) => ({
-      ...prevData,
-      rowCount: prevData.rowCount + 1,
-    }));
-  }, []);
-
-  const deleteRow = useCallback((rowIndex: number) => {
-    setData((prevData) => {
-      const newCells = { ...prevData.cells };
-      
-      // Remove cells in the specified row
-      Object.keys(newCells).forEach((cellId) => {
-        const row = parseInt(cellId.match(/\d+/)?.[0] || '0', 10);
-        if (row === rowIndex) {
-          delete newCells[cellId];
-        } else if (row > rowIndex) {
-          // Shift cells up
-          const col = cellId.match(/[A-Z]+/)?.[0] || 'A';
-          const newCellId = `${col}${row - 1}`;
-          newCells[newCellId] = newCells[cellId];
-          delete newCells[cellId];
-        }
-      });
-
-      return {
-        ...prevData,
-        cells: newCells,
-        rowCount: prevData.rowCount - 1,
-      };
-    });
-  }, []);
-
-  const addColumn = useCallback(() => {
-    setData((prevData) => ({
-      ...prevData,
-      columnCount: prevData.columnCount + 1,
-    }));
-  }, []);
-
-  const deleteColumn = useCallback(() => {
-    setData((prevData) => {
-      const newCells = { ...prevData.cells };
-      
-      // Remove cells in the specified column
-      Object.keys(newCells).forEach((cellId) => {
-        const { column } = cellUtils.parsePosition(cellId);
-        const columnIndex = cellUtils.columnToIndex(column);
-        
-        if (columnIndex === prevData.columnCount - 1) {
-          delete newCells[cellId];
-        } else if (columnIndex < prevData.columnCount - 1) {
-          // Shift cells left
-          const newColumn = cellUtils.indexToColumn(columnIndex);
-          const row = cellUtils.parsePosition(cellId).row;
-          const newCellId = `${newColumn}${row}`;
-          newCells[newCellId] = newCells[cellId];
-          delete newCells[cellId];
-        }
-      });
-
-      return {
-        ...prevData,
-        cells: newCells,
-        columnCount: Math.max(1, prevData.columnCount - 1), // Ensure at least one column remains
-      };
-    });
-  }, []);
-
-  const clearCell = useCallback((cellId: string) => {
-    setData((prevData) => {
-      const newCells = { ...prevData.cells };
-      if (newCells[cellId]) {
-        newCells[cellId] = {
-          ...newCells[cellId],
-          value: '',
-          formula: '',
-        };
-      }
-      return {
-        ...prevData,
-        cells: newCells,
-      };
-    });
-  }, []);
 
   return {
     data,
-    selectedRange,
-    setSelectedRange,
+    setData, // Exposed for initial data loading
+    activeSheet,
+    selection,
+    setSelection,
     updateCell,
-    formatCell,
+    formatCells,
     addRow,
     deleteRow,
-    addColumn,     
+    addColumn,
     deleteColumn,
-    clearCell,
-    setData,
+    setActiveSheetId,
+    recalculateSheet,
   };
 }

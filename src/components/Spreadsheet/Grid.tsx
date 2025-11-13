@@ -1,17 +1,17 @@
 // src/components/Spreadsheet/Grid.tsx
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Cell } from './Cell';
-import { Sheet, CellFormat, SelectionState } from '@/types/spreadsheet';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Cell as CellComponent } from './Cell'; // Renamed import to avoid conflict
+import { Sheet, CellFormat, SelectionState, Cell } from '@/types/spreadsheet';
 import { columnToNumber, numberToColumn } from '@/lib/utils';
 
 interface GridProps {
-    sheet: Sheet;
-    selection: SelectionState;
-    onSelectionChange: (selection: SelectionState) => void;
-    onCellChange: (cellRef: string, value: string) => void;
-    onCellFormatChange: (cellRef: string, format: Partial<CellFormat>) => void;
-    currentFormat: CellFormat;
+  sheet: Sheet;
+  selection: SelectionState;
+  onSelectionChange: (selection: SelectionState) => void;
+  onCellChange: (cellRef: string, value: string) => void;
+  onCellFormatChange: (cellRef: string, format: Partial<CellFormat>) => void;
+  currentFormat: CellFormat;
 }
 
 export const Grid: React.FC<GridProps> = ({
@@ -19,100 +19,19 @@ export const Grid: React.FC<GridProps> = ({
   selection,
   onSelectionChange,
   onCellChange,
-  currentFormat,
 }) => {
   const [isSelecting, setIsSelecting] = useState(false);
-  const gridRef = useRef<HTMLDivElement>(null);
-  const [scrollPosition, setScrollPosition] = useState({ top: 0, left: 0 });
-
-  const handleScroll = useCallback(() => {
-    if (gridRef.current) {
-      setScrollPosition({
-        top: gridRef.current.scrollTop,
-        left: gridRef.current.scrollLeft,
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    const grid = gridRef.current;
-    if (grid) {
-      grid.addEventListener('scroll', handleScroll);
-      return () => grid.removeEventListener('scroll', handleScroll);
-    }
-  }, [handleScroll]);
 
   const getCellRef = useCallback((row: number, col: number): string => {
     return `${numberToColumn(col)}${row}`;
   }, []);
-
-  const renderHeaderRow = () => {
-    const headers = [];
-    // Corner cell
-    headers.push(
-      <div
-        key="corner"
-        className="sticky top-0 left-0 bg-gray-200 border-r border-b border-gray-300 z-20"
-        style={{ gridColumn: 1, gridRow: 1 }}
-      />
-    );
-
-    // Column headers
-    for (let col = 1; col <= sheet.columnCount; col++) {
-      headers.push(
-        <div
-          key={`header-${col}`}
-          className="sticky top-0 bg-gray-100 border-r border-b border-gray-300 px-2 py-1 text-center font-medium z-10"
-          style={{ gridColumn: col + 1 }}
-        >
-          {numberToColumn(col)}
-        </div>
-      );
-    }
-    return headers;
-  };
-
-  const renderRowHeaders = () => {
-    const headers = [];
-    for (let row = 1; row <= sheet.rowCount; row++) {
-      headers.push(
-        <div
-          key={`row-${row}`}
-          className="sticky left-0 bg-gray-100 border-r border-b border-gray-300 px-2 py-1 text-center font-medium z-10"
-          style={{ gridRow: row + 1 }}
-        >
-          {row}
-        </div>
-      );
-    }
-    return headers;
-  };
-
-  const isInSelection = useCallback((cellRef: string) => {
-    if (!selection.start || !selection.end) return false;
-
-    const startCol = columnToNumber(selection.start.match(/[A-Z]+/)![0]);
-    const startRow = parseInt(selection.start.match(/\d+/)![0]);
-    const endCol = columnToNumber(selection.end.match(/[A-Z]+/)![0]);
-    const endRow = parseInt(selection.end.match(/\d+/)![0]);
-
-    const col = columnToNumber(cellRef.match(/[A-Z]+/)![0]);
-    const row = parseInt(cellRef.match(/\d+/)![0]);
-
-    return (
-      col >= Math.min(startCol, endCol) &&
-      col <= Math.max(startCol, endCol) &&
-      row >= Math.min(startRow, endRow) &&
-      row <= Math.max(startRow, endRow)
-    );
-  }, [selection]);
 
   const handleMouseDown = useCallback((cellRef: string) => {
     setIsSelecting(true);
     onSelectionChange({
       start: cellRef,
       end: cellRef,
-      sheetId: sheet.id
+      sheetId: sheet.id,
     });
   }, [sheet.id, onSelectionChange]);
 
@@ -120,7 +39,7 @@ export const Grid: React.FC<GridProps> = ({
     if (isSelecting) {
       onSelectionChange({
         ...selection,
-        end: cellRef
+        end: cellRef,
       });
     }
   }, [isSelecting, selection, onSelectionChange]);
@@ -128,68 +47,86 @@ export const Grid: React.FC<GridProps> = ({
   const handleMouseUp = useCallback(() => {
     setIsSelecting(false);
   }, []);
-
+  
+  // Add a global mouseup listener to stop selection even if the cursor leaves the grid
   useEffect(() => {
-    document.addEventListener('mouseup', handleMouseUp);
-    return () => document.removeEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
   }, [handleMouseUp]);
 
-  const renderCells = useCallback(() => {
-    const cells = [];
-    for (let row = 1; row <= sheet.rowCount; row++) {
-      for (let col = 1; col <= sheet.columnCount; col++) {
-        const cellRef = getCellRef(row, col);
-        const cell = sheet.cells[cellRef] || { value: '', format: {} };
-        cells.push(
-          <Cell
+  const renderGrid = () => {
+    const gridItems = [];
+
+    // Corner cell
+    gridItems.push(<div key="corner" className="sticky top-0 left-0 bg-gray-200 border-r border-b border-gray-300 z-30" />);
+
+    // Column headers
+    for (let c = 1; c <= sheet.columnCount; c++) {
+      gridItems.push(
+        <div key={`col-header-${c}`} className="sticky top-0 bg-gray-100 border-r border-b border-gray-300 flex items-center justify-center font-semibold text-sm z-20">
+          {numberToColumn(c)}
+        </div>
+      );
+    }
+
+    // Data rows
+    for (let r = 1; r <= sheet.rowCount; r++) {
+      // Row header
+      gridItems.push(
+        <div key={`row-header-${r}`} className="sticky left-0 bg-gray-100 border-r border-b border-gray-300 flex items-center justify-center font-semibold text-sm z-20">
+          {r}
+        </div>
+      );
+      // Cells
+      for (let c = 1; c <= sheet.columnCount; c++) {
+        const cellRef = getCellRef(r, c);
+        const cellData = sheet.cells[cellRef];
+        const { row: startRow, col: startCol } = parseCellRef(selection.start);
+        const { row: endRow, col: endCol } = parseCellRef(selection.end);
+
+        const isSelected = r === startRow && c === startCol;
+        const isInSelection =
+          r >= Math.min(startRow, endRow) && r <= Math.max(startRow, endRow) &&
+          c >= Math.min(startCol, endCol) && c <= Math.max(startCol, endCol);
+
+        gridItems.push(
+          <CellComponent
             key={cellRef}
             cellRef={cellRef}
-            value={cell.value}
-            format={{ ...currentFormat, ...cell.format }}
-            isSelected={selection.start === cellRef}
-            isInSelection={isInSelection(cellRef)}
+            value={cellData?.calculatedValue || cellData?.value || ''}
+            formula={cellData?.formula}
+            format={cellData?.format || {}}
+            isSelected={isSelected}
+            isInSelection={isInSelection}
             onChange={(value) => onCellChange(cellRef, value)}
             onMouseDown={() => handleMouseDown(cellRef)}
             onMouseEnter={() => handleMouseEnter(cellRef)}
             isHeader={false}
-            formula={cell.formula}
           />
         );
       }
     }
-    return cells;
-  }, [
-    sheet,
-    currentFormat,
-    selection,
-    getCellRef,
-    isInSelection,
-    onCellChange,
-    handleMouseDown,
-    handleMouseEnter
-  ]);
+    return gridItems;
+  };
+
+  const parseCellRef = (ref: string): { row: number; col: number } => {
+    const match = ref.match(/([A-Z]+)(\d+)/);
+    if (!match) return { row: 1, col: 1 };
+    return { col: columnToNumber(match[1]), row: parseInt(match[2], 10) };
+  };
 
   return (
-    <div 
-      ref={gridRef}
-      className="w-full h-full overflow-auto"
-      style={{ 
-        position: 'relative',
-        WebkitOverflowScrolling: 'touch' 
-      }}
-    >
+    <div className="w-full h-full overflow-auto relative" onMouseUp={handleMouseUp}>
       <div
-        className="absolute min-w-full"
+        className="grid absolute"
         style={{
-          display: 'grid',
-          gridTemplateColumns: `30px repeat(${sheet.columnCount}, minmax(100px, 1fr))`,
-          gridTemplateRows: `30px repeat(${sheet.rowCount}, 40px)`,
-          backgroundColor: '#f8f9fa',
+          gridTemplateColumns: `40px repeat(${sheet.columnCount}, 120px)`,
+          gridTemplateRows: `30px repeat(${sheet.rowCount}, 28px)`,
         }}
       >
-        {renderHeaderRow()}
-        {renderRowHeaders()}
-        {renderCells()}
+        {renderGrid()}
       </div>
     </div>
   );

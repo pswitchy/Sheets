@@ -1,55 +1,66 @@
 // src/pages/api/export/[id].ts
 
-import { NextApiRequest, NextApiResponse } from 'next';
-import { getSession } from 'next-auth/react';
+import { NextApiResponse } from 'next';
 import { database } from '@/lib/database';
 import { exportUtils } from '@/lib/export-utils';
 import { SpreadsheetData } from '@/types/spreadsheet';
+import { apiHandler, AuthenticatedNextApiRequest } from '@/lib/api-middleware';
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
+// Note: This handler doesn't use the standard JSON response, so we don't type the response with ApiResponse
+async function handler(
+  req: AuthenticatedNextApiRequest,
+  res: NextApiResponse 
 ) {
-  const session = await getSession({ req });
-  if (!session) {
-    return res.status(401).json({ message: "Not authenticated" });
-  }
-
-  const { id } = req.query;
-  const { format } = req.query;
+  const { id, format } = req.query;
 
   if (typeof id !== 'string') {
-    return res.status(400).json({ message: "Invalid ID" });
+    res.status(400).json({ message: "Invalid Spreadsheet ID" });
+    return;
   }
 
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
-    return res.status(405).json({ message: `Method ${req.method} Not Allowed` });
+    res.status(405).end(`Method ${req.method} Not Allowed`);
+    return;
   }
 
   try {
+    // Permission check: a more robust system would check shares here as well
     const spreadsheet = await database.getSpreadsheet(id);
-    if (!spreadsheet) {
-      return res.status(404).json({ message: "Spreadsheet not found" });
+    if (!spreadsheet || spreadsheet.userId !== req.user.id) {
+      res.status(404).json({ message: "Spreadsheet not found or permission denied" });
+      return;
     }
 
-    switch (format) {
-      case 'xlsx':
-        const workbookBuffer = await exportUtils.toExcel(spreadsheet.data as unknown as SpreadsheetData, spreadsheet.name);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${spreadsheet.name}.xlsx"`);
-        return res.status(200).send(workbookBuffer);
+    const spreadsheetData = spreadsheet.data as unknown as SpreadsheetData;
+    const filename = spreadsheet.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
 
-      case 'csv':
-        const csvContent = await exportUtils.toCsv(spreadsheet.data as unknown as SpreadsheetData, spreadsheet.name);
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename="${spreadsheet.name}.csv"`);
-        return res.status(200).send(csvContent);
-
-      default:
-        return res.status(400).json({ message: "Invalid export format" });
+    if (format === 'xlsx') {
+      const excelBlob = await exportUtils.toExcel(spreadsheetData, filename);
+      const buffer = Buffer.from(await excelBlob.arrayBuffer());
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
+      res.status(200).send(buffer);
+      return;
     }
+
+    if (format === 'csv') {
+      const csvBlob = await exportUtils.toCsv(spreadsheetData, filename);
+      const csvText = await csvBlob.text();
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
+      res.status(200).send(csvText);
+      return;
+    }
+    
+    res.status(400).json({ message: "Invalid export format. Use 'xlsx' or 'csv'." });
+    return;
+
   } catch (error) {
-    return res.status(500).json({ message: "Error exporting spreadsheet" });
+    console.error("Export error:", error);
+    res.status(500).json({ message: "Error exporting spreadsheet" });
+    return;
   }
 }
+
+export default apiHandler(handler);
