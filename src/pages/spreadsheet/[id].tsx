@@ -58,11 +58,20 @@ function SpreadsheetPage() {
       setIsLoading(true);
       try {
         const loadedData = await spreadsheetService.getSpreadsheet(spreadsheetId as string);
-        const recalculatedSheets = loadedData.sheets.map(sheet => recalculateSheet(sheet));
-        setData({ ...loadedData, sheets: recalculatedSheets });
+
+        // ✅ SAFETY CHECK: Ensure sheets is an array before mapping
+        if (loadedData && Array.isArray(loadedData.sheets)) {
+          const recalculatedSheets = loadedData.sheets.map(sheet => recalculateSheet(sheet));
+          setData({ ...loadedData, sheets: recalculatedSheets });
+        } else {
+          // If data is malformed, throw an error to be caught below
+          throw new Error("Spreadsheet data is malformed and does not contain sheets.");
+        }
+
       } catch (err: any) {
-        setError(err.message || 'Failed to load spreadsheet.');
-        toast.error(err.message || 'Failed to load spreadsheet.');
+        const errorMessage = err.message || 'Failed to load spreadsheet.';
+        setError(errorMessage);
+        toast.error(errorMessage);
       } finally {
         setIsLoading(false);
       }
