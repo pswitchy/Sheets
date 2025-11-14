@@ -9,6 +9,7 @@ import { Grid } from '@/components/Spreadsheet/Grid';
 import FormulaBar from '@/components/Spreadsheet/FormulaBar';
 import { ChartDialog } from '@/components/Spreadsheet/ChartDialog';
 import { SheetTabs } from '@/components/Spreadsheet/SheetTabs';
+import { StatusBar } from '@/components/Spreadsheet/StatusBar';
 import { SpreadsheetData, CellFormat, SelectionState } from '@/types/spreadsheet';
 import { spreadsheetService } from '@/services/spreadsheetService';
 import { toast } from 'react-hot-toast';
@@ -19,11 +20,11 @@ import { useSpreadsheet } from '@/hooks/useSpreadsheet';
 import { useAutosave } from '@/hooks/useAutosave';
 import { SpreadsheetContextMenu } from '@/components/Spreadsheet/ContextMenu';
 import { SpreadsheetLayout } from '@/components/layouts/SpreadsheetLayout';
+import { columnToNumber, numberToColumn } from '@/lib/utils';
 
 function SpreadsheetPage() {
   const router = useRouter();
   const { id: spreadsheetId } = router.query;
-  // const { showToast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,22 +53,19 @@ function SpreadsheetPage() {
     renameSheet,
   } = useSpreadsheet();
 
+  // Data Fetching
   useEffect(() => {
     const loadSpreadsheet = async () => {
       if (!spreadsheetId) return;
       setIsLoading(true);
       try {
         const loadedData = await spreadsheetService.getSpreadsheet(spreadsheetId as string);
-
-        // ✅ SAFETY CHECK: Ensure sheets is an array before mapping
         if (loadedData && Array.isArray(loadedData.sheets)) {
           const recalculatedSheets = loadedData.sheets.map(sheet => recalculateSheet(sheet));
           setData({ ...loadedData, sheets: recalculatedSheets });
         } else {
-          // If data is malformed, throw an error to be caught below
           throw new Error("Spreadsheet data is malformed and does not contain sheets.");
         }
-
       } catch (err: any) {
         const errorMessage = err.message || 'Failed to load spreadsheet.';
         setError(errorMessage);
@@ -79,16 +77,18 @@ function SpreadsheetPage() {
     loadSpreadsheet();
   }, [spreadsheetId, setData, recalculateSheet]);
 
+  // Autosave
   useAutosave(data, async (dataToSave) => {
     if (!spreadsheetId || isLoading) return;
     try {
       await spreadsheetService.updateSpreadsheet(spreadsheetId as string, dataToSave);
     } catch (err) {
       console.error('Autosave failed:', err);
-      toast.error('Failed to autosave changes.');
+      toast.error('Auto-save failed.');
     }
   }, 2000);
 
+  // Memoized derived state for performance
   const currentFormat = useMemo<CellFormat>(() => {
     return activeSheet?.cells[selection.start]?.format || {};
   }, [selection.start, activeSheet]);
@@ -98,6 +98,55 @@ function SpreadsheetPage() {
     return cell?.formula || cell?.value || '';
   }, [selection.start, activeSheet]);
 
+  const parseCellRef = (ref: string): { row: number; col: number } | null => {
+    const match = ref.match(/([A-Z]+)(\d+)/);
+    if (!match) return null;
+    return { col: columnToNumber(match[1]), row: parseInt(match[2], 10) };
+  };
+
+  const selectionCalculations = useMemo(() => {
+    if (!selection.start || !activeSheet) return null;
+    
+    const startRef = parseCellRef(selection.start);
+    const endRef = parseCellRef(selection.end);
+    if (!startRef || !endRef) return null;
+
+    let sum = 0;
+    let count = 0;
+    let numbers: number[] = [];
+
+    const minRow = Math.min(startRef.row, endRef.row);
+    const maxRow = Math.max(startRef.row, endRef.row);
+    const minCol = Math.min(startRef.col, endRef.col);
+    const maxCol = Math.max(startRef.col, endRef.col);
+
+    for (let r = minRow; r <= maxRow; r++) {
+      for (let c = minCol; c <= maxCol; c++) {
+        const cellRef = `${numberToColumn(c)}${r}`;
+        const cell = activeSheet.cells[cellRef];
+        if (cell && (cell.value || cell.calculatedValue)) {
+          const valueToConsider = cell.calculatedValue || cell.value;
+          if (valueToConsider) {
+            count++;
+            const numValue = parseFloat(valueToConsider);
+            if (!isNaN(numValue)) {
+              numbers.push(numValue);
+            }
+          }
+        }
+      }
+    }
+    
+    if (numbers.length === 0) return { sum: 0, average: 0, count };
+
+    sum = numbers.reduce((a, b) => a + b, 0);
+    const average = sum / numbers.length;
+
+    return { sum, average, count };
+
+  }, [selection, activeSheet]);
+
+  // Callbacks
   const handleCreateChart = useCallback((config: ChartConfig) => {
     setData(prev => ({
       ...prev,
@@ -106,13 +155,16 @@ function SpreadsheetPage() {
     setIsChartDialogOpen(false);
   }, [setData]);
 
-  useHotkeys('ctrl+b, cmd+b', (e) => { e.preventDefault(); formatCells({ bold: !currentFormat.bold }) }, [currentFormat, formatCells]);
-  useHotkeys('ctrl+i, cmd+i', (e) => { e.preventDefault(); formatCells({ italic: !currentFormat.italic }) }, [currentFormat, formatCells]);
-  useHotkeys('ctrl+u, cmd+u', (e) => { e.preventDefault(); formatCells({ underline: !currentFormat.underline }) }, [currentFormat, formatCells]);
-  useHotkeys('ctrl+x, cmd+x', (e) => { e.preventDefault(); cutCells() }, [cutCells]);
-  useHotkeys('ctrl+c, cmd+c', (e) => { e.preventDefault(); copyCells() }, [copyCells]);
-  useHotkeys('ctrl+v, cmd+v', (e) => { e.preventDefault(); pasteCells() }, [pasteCells]);
+  // Keyboard Shortcuts
+  useHotkeys('ctrl+b, cmd+b', (e) => { e.preventDefault(); formatCells({ bold: !currentFormat.bold }); }, [currentFormat, formatCells]);
+  useHotkeys('ctrl+i, cmd+i', (e) => { e.preventDefault(); formatCells({ italic: !currentFormat.italic }); }, [currentFormat, formatCells]);
+  useHotkeys('ctrl+u, cmd+u', (e) => { e.preventDefault(); formatCells({ underline: !currentFormat.underline }); }, [currentFormat, formatCells]);
+  useHotkeys('ctrl+x, cmd+x', (e) => { e.preventDefault(); cutCells(); toast('Cut to clipboard'); }, [cutCells]);
+  useHotkeys('ctrl+c, cmd+c', (e) => { e.preventDefault(); copyCells(); toast('Copied to clipboard'); }, [copyCells]);
+  useHotkeys('ctrl+v, cmd+v', (e) => { e.preventDefault(); pasteCells(); }, [pasteCells]);
+  useHotkeys('backspace, delete', (e) => { e.preventDefault(); clearCells(); }, [clearCells]);
 
+  // Render Logic
   if (isLoading) {
     return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
   }
@@ -157,13 +209,13 @@ function SpreadsheetPage() {
       />
       <div className="flex-1 relative overflow-hidden">
         <SpreadsheetContextMenu
-          onCut={cutCells}
-          onCopy={copyCells}
+          onCut={() => { cutCells(); toast('Cut to clipboard'); }}
+          onCopy={() => { copyCells(); toast('Copied to clipboard'); }}
           onPaste={pasteCells}
           onDelete={clearCells}
           onFormat={(format) => formatCells({ [format]: !currentFormat[format as keyof CellFormat] } as Partial<CellFormat>)}
           onCreateChart={() => setIsChartDialogOpen(true)}
-          onFilter={() => {}}
+          onFilter={() => { /* Implement filter logic in useSpreadsheet and call here */ }}
         >
           <Grid
             sheet={activeSheet}
@@ -184,6 +236,7 @@ function SpreadsheetPage() {
         onDeleteSheet={deleteSheet}
         onSheetChange={setActiveSheetId}
       />
+      <StatusBar calculations={selectionCalculations} />
       <ChartDialog
         isOpen={isChartDialogOpen}
         onClose={() => setIsChartDialogOpen(false)}
